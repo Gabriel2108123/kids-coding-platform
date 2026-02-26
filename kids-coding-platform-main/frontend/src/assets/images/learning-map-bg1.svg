@@ -1,0 +1,50 @@
+<!-- SVG Placeholder Background for Learning Map -->
+<svg width="800" height="400" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="skyGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#87CEEB;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#98FB98;stop-opacity:1" />
+    </linearGradient>
+    <radialGradient id="cloudGradient" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" style="stop-color:#FFFFFF;stop-opacity:0.8" />
+      <stop offset="100%" style="stop-color:#F0F8FF;stop-opacity:0.4" />
+    </radialGradient>
+  </defs>
+  
+  <!-- Sky background -->
+  <rect width="100%" height="100%" fill="url(#skyGradient)" />
+  
+  <!-- Mountains in background -->
+  <polygon points="0,300 100,200 200,250 300,180 400,220 500,160 600,200 700,140 800,180 800,400 0,400" fill="#90EE90" opacity="0.6"/>
+  <polygon points="0,350 150,250 300,300 450,200 600,280 750,220 800,250 800,400 0,400" fill="#32CD32" opacity="0.4"/>
+  
+  <!-- Clouds -->
+  <ellipse cx="150" cy="80" rx="40" ry="25" fill="url(#cloudGradient)" />
+  <ellipse cx="170" cy="85" rx="50" ry="30" fill="url(#cloudGradient)" />
+  <ellipse cx="190" cy="78" rx="35" ry="20" fill="url(#cloudGradient)" />
+  
+  <ellipse cx="550" cy="60" rx="45" ry="28" fill="url(#cloudGradient)" />
+  <ellipse cx="570" cy="65" rx="55" ry="32" fill="url(#cloudGradient)" />
+  <ellipse cx="590" cy="58" rx="40" ry="22" fill="url(#cloudGradient)" />
+  
+  <!-- Islands/platforms -->
+  <ellipse cx="200" cy="320" rx="80" ry="30" fill="#8FBC8F" />
+  <ellipse cx="400" cy="280" rx="70" ry="25" fill="#9ACD32" />
+  <ellipse cx="600" cy="330" rx="85" ry="35" fill="#8FBC8F" />
+  
+  <!-- Trees on islands -->
+  <rect x="190" y="290" width="8" height="30" fill="#8B4513" />
+  <circle cx="194" cy="285" r="15" fill="#228B22" />
+  
+  <rect x="590" y="295" width="8" height="35" fill="#8B4513" />
+  <circle cx="594" cy="290" r="18" fill="#228B22" />
+  
+  <!-- Sun -->
+  <circle cx="650" cy="90" r="25" fill="#FFD700" opacity="0.8" />
+  
+  <!-- Sparkles -->
+  <text x="100" y="150" font-size="20" fill="#FFD700">✨</text>
+  <text x="300" y="120" font-size="16" fill="#FFD700">✨</text>
+  <text x="500" y="180" font-size="18" fill="#FFD700">✨</text>
+  <text x="700" y="160" font-size="20" fill="#FFD700">✨</text>
+</svg>

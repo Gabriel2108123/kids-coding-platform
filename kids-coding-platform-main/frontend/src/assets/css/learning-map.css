@@ -1,0 +1,44 @@
+/* Learning Map Background Styles */
+.learning-map-container {
+  background: linear-gradient(135deg, 
+    rgba(147, 197, 253, 0.8) 0%, 
+    rgba(167, 243, 208, 0.8) 50%,
+    rgba(196, 181, 253, 0.8) 100%
+  );
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  position: relative;
+  min-height: 400px;
+}
+
+.learning-map-with-image {
+  /* Background image is set dynamically in React component */
+  background: linear-gradient(135deg, 
+    rgba(147, 197, 253, 0.6) 0%, 
+    rgba(167, 243, 208, 0.6) 50%,
+    rgba(196, 181, 253, 0.6) 100%
+  );
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+
+/* Animated floating elements */
+.floating-cloud {
+  animation: float 6s ease-in-out infinite;
+}
+
+.floating-star {
+  animation: twinkle 2s ease-in-out infinite alternate;
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-10px); }
+}
+
+@keyframes twinkle {
+  0% { opacity: 0.5; transform: scale(1); }
+  100% { opacity: 1; transform: scale(1.1); }
+}

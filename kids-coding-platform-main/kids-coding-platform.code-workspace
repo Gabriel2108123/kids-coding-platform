@@ -1,0 +1,105 @@
+{
+  "folders": [
+    {
+      "name": "Frontend",
+      "path": "./frontend"
+    },
+    {
+      "name": "Backend", 
+      "path": "./backend"
+    },
+    {
+      "name": "Scripts",
+      "path": "./scripts"
+    }
+  ],
+  "settings": {
+    // Workspace-specific performance optimizations
+    "search.exclude": {
+      "**/node_modules": true,
+      "**/build": true,
+      "**/dist": true,
+      "**/.git": true,
+      "**/coverage": true,
+      "**/.nyc_output": true,
+      "**/package-lock.json": true,
+      "**/yarn.lock": true,
+      "**/.cache": true,
+      "**/tmp": true,
+      "**/temp": true,
+      "**/*.log": true
+    },
+    
+    "files.watcherExclude": {
+      "**/node_modules/**": true,
+      "**/build/**": true,
+      "**/dist/**": true,
+      "**/.git/**": true,
+      "**/coverage/**": true,
+      "**/.nyc_output/**": true,
+      "**/tmp/**": true,
+      "**/temp/**": true,
+      "**/.cache/**": true,
+      "**/package-lock.json": true,
+      "**/yarn.lock": true
+    },
+    
+    // Multi-root workspace optimizations
+    "typescript.preferences.includePackageJsonAutoImports": "off",
+    "typescript.disableAutomaticTypeAcquisition": true,
+    "typescript.suggest.autoImports": false,
+    
+    // Reduce memory usage
+    "editor.semanticHighlighting.enabled": false,
+    "editor.suggest.localityBonus": true,
+    "workbench.enableExperiments": false,
+    
+    // Optimize git for large projects
+    "git.autorefresh": false,
+    "git.autofetch": false,
+    "scm.diffDecorations": "none"
+  },
+  
+  "extensions": {
+    "recommendations": [
+      "ms-vscode.vscode-typescript-next",
+      "bradlc.vscode-tailwindcss",
+      "ms-vscode.vscode-json"
+    ],
+    "unwantedRecommendations": [
+      "ms-vscode.vscode-eslint",
+      "ms-vscode.vscode-prettier"
+    ]
+  },
+  
+  "tasks": {
+    "version": "2.0.0",
+    "tasks": [
+      {
+        "label": "Optimize Environment",
+        "type": "shell",
+        "command": "scripts/optimize-environment.bat",
+        "group": "build",
+        "presentation": {
+          "echo": true,
+          "reveal": "always",
+          "focus": false,
+          "panel": "shared"
+        }
+      },
+      {
+        "label": "Clean All Caches",
+        "type": "shell",
+        "command": "cd frontend && npm run clean",
+        "group": "build"
+      },
+      {
+        "label": "Start Fast Mode",
+        "type": "shell",
+        "command": "cd frontend && npm run start:fast",
+        "group": "build",
+        "isBackground": true
+      }
+    ]
+  }
+}

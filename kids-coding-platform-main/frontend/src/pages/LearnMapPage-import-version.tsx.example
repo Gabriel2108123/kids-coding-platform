@@ -1,0 +1,23 @@
+// Alternative approach using imports - use this if public folder doesn't work
+
+import React, { useState, useEffect } from 'react';
+import { useFamilyAuth } from '../context/FamilyAuthContext';
+import { useNavigate } from 'react-router-dom';
+import Header from '../components/Header';
+import { ChildProfile } from '../types/family';
+import '../assets/css/learning-map.css';
+
+// Import the image directly
+import learningMapBg from '../assets/images/learning-map-bg.png';
+
+// Then in the component, use it like this:
+// style={{
+//   backgroundImage: `url(${learningMapBg})`,
+//   backgroundSize: 'cover',
+//   backgroundPosition: 'center',
+//   backgroundRepeat: 'no-repeat',
+//   minHeight: '400px',
+//   backgroundColor: '#93c5fd', // Fallback blue color
+// }}
+
+export default {}; // placeholder export

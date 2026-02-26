@@ -1,0 +1,145 @@
+# Dependencies
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Environment variables
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Build outputs
+/backend/dist/
+/frontend/build/
+/frontend/.next/
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Logs
+logs
+*.log
+
+# Runtime data
+pids
+*.pid
+*.seed
+*.pid.lock
+
+# Coverage directory used by tools like istanbul
+coverage/
+*.lcov
+
+# TypeScript cache
+*.tsbuildinfo
+.tsbuildinfo
+
+# Temporary folders
+tmp/
+temp/
+.cache/
+.parcel-cache/
+
+# Database
+*.db
+*.sqlite
+
+# Package manager
+package-lock.json
+yarn.lock
+
+# Performance and cache files
+.eslintcache
+.stylelintcache
+.postcssrc
+.babel_cache/
+.webpack_cache/
+.npm/
+.yarn/
+.pnp.*
+
+# VS Code specific performance files
+.vscode/settings.json.bak
+.vscode/tasks.json.bak
+.vscode/.ropeproject
+
+# Editor backup files
+*~
+*.swp
+*.swo
+.#*
+#*#
+
+# Large log files that can slow down indexing
+*.log.*
+*.out
+*.err
+
+# Source maps (can be large)
+*.map
+
+# Storybook build outputs
+storybook-static/
+.storybook/build/
+
+# Testing output
+coverage/
+.nyc_output/
+test-results/
+test-output/
+
+# Documentation builds
+docs/build/
+docs/.docusaurus/
+
+# Performance optimization - ignore large files that can be regenerated
+**/*.tsbuildinfo
+**/.cache
+**/build
+**/dist
+**/.git
+**/node_modules
+
+# Empty or temporary files patterns
+**/{
+**/()
+**/npm
+**/totalLessons
+
+# Documentation files that cause clutter
+**/*_FIXES.md
+**/*_STATUS.md
+**/*_DOCUMENTATION.md
+**/*_SUMMARY.md
+**/*_GUIDE.md
+**/IMPLEMENTATION_*.md
+**/INTEGRATION_*.md
+**/NETWORK_*.md
+**/AUTH_*.md
+**/MASCOT_*.md
+**/TYPESCRIPT_*.md
+**/ESLINT_*.md
+
+# Test files (except actual working tests)
+**/*.test.backup.*
+**/*.spec.backup.*
+**/*-test-*.js
+**/*-test-*.ts
+**/test-*.js
+**/test-*.ts

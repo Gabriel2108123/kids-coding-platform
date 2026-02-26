@@ -1,0 +1,78 @@
+/* Blockly Editor Specific Styles */
+.blockly-workspace {
+  /* Ensure proper interaction */
+  pointer-events: auto !important;
+  user-select: none;
+  touch-action: none;
+  position: relative !important;
+  overflow: visible !important;
+}
+
+.blockly-workspace * {
+  /* Allow all mouse events on Blockly elements */
+  pointer-events: auto !important;
+}
+
+.blockly-workspace .blocklyMainBackground {
+  /* Ensure background doesn't block interactions */
+  pointer-events: none !important;
+}
+
+.blockly-workspace .blocklyDraggable {
+  /* Ensure blocks are draggable */
+  cursor: grab !important;
+  pointer-events: auto !important;
+}
+
+.blockly-workspace .blocklyDraggable:active {
+  cursor: grabbing !important;
+}
+
+.blockly-workspace .blocklyDraggable:hover {
+  /* Visual feedback on hover */
+  filter: brightness(1.1);
+}
+
+/* Fix for toolbox interaction */
+.blocklyToolboxDiv {
+  pointer-events: auto !important;
+  user-select: none;
+  z-index: 10 !important;
+}
+
+.blocklyFlyout {
+  pointer-events: auto !important;
+}
+
+.blocklyFlyoutBackground {
+  pointer-events: auto !important;
+}
+
+/* Ensure proper z-index for Blockly elements */
+.blocklyWidgetDiv {
+  z-index: 999 !important;
+  pointer-events: auto !important;
+}
+
+.blocklyTooltipDiv {
+  z-index: 1000 !important;
+  pointer-events: auto !important;
+}
+
+/* Remove any conflicting styles that might prevent interaction */
+.blockly-workspace .blocklyBlockCanvas,
+.blockly-workspace .blocklyBubbleCanvas {
+  pointer-events: auto !important;
+}
+
+/* Ensure scrollbars work properly */
+.blocklyScrollbarHorizontal,
+.blocklyScrollbarVertical {
+  pointer-events: auto !important;
+}
+
+/* Fix for context menus */
+.blocklyContextMenu {
+  pointer-events: auto !important;
+  z-index: 1001 !important;
+}

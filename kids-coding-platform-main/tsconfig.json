@@ -1,0 +1,15 @@
+{
+  "compilerOptions": {
+    "composite": true
+  },
+  "references": [
+    {
+      "path": "./frontend"
+    },
+    {
+      "path": "./backend"
+    }
+  ],
+  "files": [],
+  "include": []
+}
