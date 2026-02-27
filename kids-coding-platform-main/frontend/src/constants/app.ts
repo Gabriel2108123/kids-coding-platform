@@ -8,7 +8,7 @@ export const PLATFORM_NAME = 'Bugsby Coding World';
 export const MASCOT_NAME = 'Bugsby';
 
 // API Configuration
-export const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:3001/api';
+export const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
 export const API_TIMEOUT = 10000; // 10 seconds
 
 // Authentication

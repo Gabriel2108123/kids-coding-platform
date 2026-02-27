@@ -6,27 +6,41 @@ import 'blockly/javascript';
 import { initializeGameBlocks, getGameBlockCategories } from './GameBlocks';
 import './BlocklyEditor.css';
 
-interface BlocklyEditorProps {
-  ageGroup: string;
+interface LocalBlocklyEditorProps {
+  ageGroup?: string;
   onCodeChange?: (code: string) => void;
+  onChange?: (code: string, xml: string) => void;
+  initialCode?: string;
+  readOnly?: boolean;
+  availableBlocks?: string[];
 }
 
-const BlocklyEditor: React.FC<BlocklyEditorProps> = ({ ageGroup, onCodeChange }) => {
+const BlocklyEditor: React.FC<LocalBlocklyEditorProps> = ({
+  ageGroup = '7-10',
+  onCodeChange,
+  onChange,
+  initialCode,
+  readOnly = false,
+  availableBlocks
+}) => {
   const blocklyDiv = useRef<HTMLDivElement>(null);
   const workspaceRef = useRef<Blockly.WorkspaceSvg | null>(null);
   const isInitialized = useRef(false);
-  
+
   // Memoize the code change handler to prevent unnecessary re-renders
-  const handleCodeChange = useCallback((code: string) => {
+  const handleCodeChange = useCallback((code: string, xml: string) => {
     if (onCodeChange) {
       onCodeChange(code);
     }
-  }, [onCodeChange]);
+    if (onChange) {
+      onChange(code, xml);
+    }
+  }, [onCodeChange, onChange]);
 
   useEffect(() => {
     // Prevent multiple initializations
     if (!blocklyDiv.current || isInitialized.current) return;
-    
+
     // Mark as initialized to prevent re-initialization
     isInitialized.current = true;
 
@@ -35,7 +49,7 @@ const BlocklyEditor: React.FC<BlocklyEditorProps> = ({ ageGroup, onCodeChange })
 
     // Get age-appropriate block categories
     const categories = getGameBlockCategories(ageGroup);
-    
+
     // Debug: Log the categories to ensure they're loaded
     // console.log('Loading Blockly categories for age group:', ageGroup, categories);
 
@@ -113,7 +127,7 @@ const BlocklyEditor: React.FC<BlocklyEditorProps> = ({ ageGroup, onCodeChange })
       },
       sounds: true,
       oneBasedIndex: true,
-      readOnly: false, // Ensure editor is not read-only
+      readOnly: readOnly,
       move: {
         scrollbars: {
           horizontal: true,
@@ -151,27 +165,27 @@ const BlocklyEditor: React.FC<BlocklyEditorProps> = ({ ageGroup, onCodeChange })
     // Ensure workspace is properly sized and interactive
     const initializeWorkspace = () => {
       if (initializationComplete) return;
-      
+
       // Force workspace to be interactive
       workspace.markFocused();
       workspace.resizeContents();
       Blockly.svgResize(workspace);
-      
+
       // Enable all interactions explicitly
       workspace.options.readOnly = false;
-      
+
       // Force a reflow to ensure proper sizing
       try {
         const canvas = workspace.getCanvas();
         canvas.setAttribute('width', blocklyDiv.current!.clientWidth.toString());
         canvas.setAttribute('height', blocklyDiv.current!.clientHeight.toString());
-        
+
         // Ensure canvas has proper pointer events
         canvas.style.pointerEvents = 'auto';
       } catch (error) {
         // Canvas size setting failed, but workspace should still work
       }
-      
+
       // Test workspace interaction only once, but ensure workspace is fully ready
       try {
         // Wait for workspace to be fully rendered
@@ -182,18 +196,18 @@ const BlocklyEditor: React.FC<BlocklyEditorProps> = ({ ageGroup, onCodeChange })
           // testBlock.initSvg();
           // testBlock.render();
           // testBlock.moveBy(50, 50);
-          
+
           // Add to tracking array
           // testBlocks.push(testBlock);
-          
+
           // Verify block interaction works
           // testBlock.setMovable(true);
           // testBlock.setDeletable(true);
           // testBlock.setEditable(true);
-          
+
           // Test passed - mark initialization as complete
           initializationComplete = true;
-          
+
           // Clean up test block safely
           // setTimeout(() => {
           //   cleanupTestBlocks();
@@ -239,10 +253,22 @@ const BlocklyEditor: React.FC<BlocklyEditorProps> = ({ ageGroup, onCodeChange })
 
     initWithFallback();
 
+    // Load initial code if provided
+    if (initialCode && !isInitialized.current) {
+      try {
+        const dom = Blockly.utils.xml.textToDom(initialCode);
+        Blockly.Xml.domToWorkspace(dom, workspace);
+      } catch (e) {
+        console.error('Failed to load initial blocks', e);
+      }
+    }
+
     // Add change listener for code generation
     workspace.addChangeListener(() => {
       const code = javascriptGenerator.workspaceToCode(workspace);
-      handleCodeChange(code);
+      const xmlDom = Blockly.Xml.workspaceToDom(workspace);
+      const xmlText = Blockly.Xml.domToText(xmlDom);
+      handleCodeChange(code, xmlText);
     });
 
     // Add starter blocks for younger children (temporarily disabled to fix headless workspace errors)
@@ -257,7 +283,7 @@ const BlocklyEditor: React.FC<BlocklyEditorProps> = ({ ageGroup, onCodeChange })
     return () => {
       // Clean up test blocks before disposing workspace
       cleanupTestBlocks();
-      
+
       // Dispose workspace safely
       try {
         if (workspace) {
@@ -266,7 +292,7 @@ const BlocklyEditor: React.FC<BlocklyEditorProps> = ({ ageGroup, onCodeChange })
       } catch (error) {
         // Workspace disposal failed, but continue
       }
-      
+
       // Reset initialization flag for potential re-mount
       isInitialized.current = false;
     };
@@ -274,10 +300,10 @@ const BlocklyEditor: React.FC<BlocklyEditorProps> = ({ ageGroup, onCodeChange })
 
   return (
     <div className="h-full w-full">
-      <div 
-        ref={blocklyDiv} 
+      <div
+        ref={blocklyDiv}
         className="h-full w-full blockly-workspace"
-        style={{ 
+        style={{
           minHeight: '580px',
           height: '580px',
           position: 'relative',
@@ -356,7 +382,7 @@ const getAgeAppropriateTheme = (ageGroup: string) => {
 //         </block>
 //       </xml>
 //     `;
-    
+
 //     // Ensure workspace is ready before adding blocks
 //     if (workspace && workspace.getCanvas()) {
 //       const dom = Blockly.utils.xml.textToDom(xml);

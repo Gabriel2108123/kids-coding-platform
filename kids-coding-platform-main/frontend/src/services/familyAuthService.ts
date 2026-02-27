@@ -1,7 +1,7 @@
 import { ParentAccount, ChildProfile, ParentAuthResponse, ChildAuthResponse, ParentRegistrationData, ChildRegistrationData } from '../types/family';
 
 class FamilyAuthService {
-  private baseURL = process.env.REACT_APP_API_URL || 'http://localhost:3001/api';
+  private baseURL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
 
   // ==========================================
   // PARENT AUTHENTICATION
@@ -42,7 +42,7 @@ class FamilyAuthService {
       if (!response.ok) {
         throw new Error(result.message || 'Registration failed');
       }
-      
+
       // Store parent token - backend returns token in data object
       if (result.data?.token) {
         localStorage.setItem('parentToken', result.data.token);
@@ -82,12 +82,12 @@ class FamilyAuthService {
       }
 
       const result = await response.json();
-      
+
       // Check if user is a parent
       if (result.data?.user && result.data.user.role !== 'parent') {
         throw new Error('Access denied. This account is not a parent account.');
       }
-      
+
       // Store parent token - backend returns token in data object
       if (result.data?.token) {
         localStorage.setItem('parentToken', result.data.token);
@@ -308,7 +308,7 @@ class FamilyAuthService {
 
       // eslint-disable-next-line no-console
       console.log('UpdateChild response status:', response.status);
-      
+
       const responseData = await response.json();
       // eslint-disable-next-line no-console
       console.log('UpdateChild response data:', responseData);
@@ -360,9 +360,9 @@ class FamilyAuthService {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ 
+        body: JSON.stringify({
           email: username.includes('@') ? username : `${username}@kids.local`,
-          password 
+          password
         }),
       });
 
@@ -372,12 +372,12 @@ class FamilyAuthService {
       }
 
       const result = await response.json();
-      
+
       // Check if user is a student (child) - backend returns data in result.data
       if (result.data?.user && result.data.user.role !== 'student') {
         throw new Error('Access denied. This account is not a child account.');
       }
-      
+
       // Store child token - backend returns token in data object
       if (result.data?.token) {
         localStorage.setItem('childToken', result.data.token);
@@ -511,12 +511,12 @@ class FamilyAuthService {
 
   isAuthenticated(): boolean {
     const userType = this.getCurrentUserType();
-    const hasToken = userType === 'parent' 
-      ? !!localStorage.getItem('parentToken') 
-      : userType === 'child' 
+    const hasToken = userType === 'parent'
+      ? !!localStorage.getItem('parentToken')
+      : userType === 'child'
         ? !!localStorage.getItem('childToken')
         : false;
-    
+
     return hasToken;
   }
 

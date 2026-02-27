@@ -1,0 +1,169 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model User {
+  id                  String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  supabaseAuthId     String?   @map("supabase_auth_id") @db.Uuid
+  username            String    @unique @db.VarChar(50)
+  passwordHash       String    @map("password_hash") @db.VarChar(255)
+  role                String    @default("child") @db.VarChar(50)
+  avatarUrl          String?   @map("avatar_url") @db.VarChar(255)
+  email               String?   @unique @db.VarChar(255)
+  isEmailVerified    Boolean   @default(false) @map("is_email_verified")
+  parentId           String?   @map("parent_id") @db.Uuid
+  firstName          String?   @map("first_name") @db.VarChar(50)
+  lastName           String?   @map("last_name") @db.VarChar(50)
+  displayName        String?   @map("display_name") @db.VarChar(100)
+  familyName         String?   @map("family_name") @db.VarChar(50)
+  phone               String?   @db.VarChar(50)
+  age                 Int?
+  ageGroup           String?   @map("age_group") @db.VarChar(50)
+  dateOfBirth        DateTime? @map("date_of_birth") @db.Date
+  gender              String?   @db.VarChar(50)
+  bio                 String?   @db.Text
+  skillLevel         String?   @default("beginner") @map("skill_level") @db.VarChar(50)
+  xp                  Int       @default(0)
+  level               Int       @default(1)
+  isActive           Boolean   @default(true) @map("is_active")
+  deletedAt          DateTime? @map("deleted_at") @db.Timestamptz(6)
+  deactivatedAt      DateTime? @map("deactivated_at") @db.Timestamptz(6)
+  deactivationReason String?   @map("deactivation_reason") @db.Text
+  coppa               Json?
+  progress            Json?
+  settings            Json?
+  safety              Json?
+  auth                Json?
+  createdAt          DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  // Relations
+  parent           User?     @relation("Family", fields: [parentId], references: [id])
+  children         User[]    @relation("Family")
+  createdProjects Project[] @relation("CreatedProjects")
+
+  @@map("users")
+}
+
+model Project {
+  id               String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  title            String    @db.VarChar(100)
+  slug             String?   @unique @db.VarChar(150)
+  description      String?
+  shortDescription String?   @map("short_description") @db.VarChar(255)
+  category         String?   @db.VarChar(50)
+  difficulty       String?   @db.VarChar(50)
+  type             String    @default("game") @db.VarChar(50)
+  creatorId        String    @map("creator_id") @db.Uuid
+  creatorName      String?   @map("creator_name") @db.VarChar(100)
+  code             String?
+  xml              String?
+  thumbnailUrl     String?   @map("thumbnail_url") @db.VarChar(255)
+  assets           Json?
+  isPublished      Boolean   @default(false) @map("is_published")
+  isFeatured       Boolean   @default(false) @map("is_featured")
+  likesCount       Int       @default(0) @map("likes_count")
+  viewsCount       Int       @default(0) @map("views_count")
+  remixCount       Int       @default(0) @map("remix_count")
+  sharesCount      Int       @default(0) @map("shares_count")
+  remixParentId    String?   @map("remix_parent_id") @db.Uuid
+  tags             String[]
+  ageGroups        String[]  @map("age_groups")
+  estimatedTime    Int?      @map("estimated_time")
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt        DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  // Relations
+  creator     User      @relation("CreatedProjects", fields: [creatorId], references: [id], onDelete: Cascade)
+  remixParent Project?  @relation("Remixes", fields: [remixParentId], references: [id])
+  remixes     Project[] @relation("Remixes")
+
+  @@map("projects")
+}
+
+model Module {
+  id                 String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  title              String   @db.VarChar(100)
+  slug               String?  @unique @db.VarChar(150)
+  description        String?
+  imageUrl           String?  @map("image_url") @db.VarChar(255)
+  difficulty         String?  @db.VarChar(20)
+  category           String?  @db.VarChar(50)
+  targetAgeGroup     String?  @map("target_age_group") @db.VarChar(50)
+  estimatedDuration  Int?     @map("estimated_duration") // in minutes
+  orderIndex         Int      @default(0) @map("order_index")
+  isActive           Boolean  @default(true) @map("is_active")
+  prerequisites      String[] @default([])
+  learningObjectives String[] @default([]) @map("learning_objectives")
+  quizzes            Json?
+  projects           Json?
+  tags               String[] @default([])
+  createdAt          DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  // Relations
+  lessons          Lesson[]
+
+  @@map("modules")
+}
+
+model Lesson {
+  id                String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  moduleId          String   @map("module_id") @db.Uuid
+  title             String   @db.VarChar(100)
+  description       String?
+  content           String?
+  orderIndex        Int      @default(0) @map("order_index")
+  xpReward          Int      @default(50) @map("xp_reward")
+  estimatedDuration Int?     @map("estimated_duration")
+  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  // Relations
+  module Module @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+
+  @@map("lessons")
+}
+
+model Badge {
+  id           String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  name         String   @db.VarChar(100)
+  description  String?
+  iconUrl      String?  @map("icon_url") @db.VarChar(255)
+  category     String?  @db.VarChar(50)
+  rarity       String   @default("common") @db.VarChar(20)
+  requirements Json?
+  rewards      Json?
+  ageGroups    String[] @default(["all"]) @map("age_groups")
+  isActive     Boolean  @default(true) @map("is_active")
+  createdBy    String?  @map("created_by") @db.Uuid
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@map("badges")
+}
+
+model Challenge {
+  id              String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  title           String   @db.VarChar(100)
+  description     String?
+  difficultyLevel String   @map("difficulty_level") @db.VarChar(20)
+  xpReward        Int      @default(100) @map("xp_reward")
+  category        String?  @db.VarChar(50)
+  orderIndex      Int      @default(0) @map("order_index")
+  isActive        Boolean  @default(true) @map("is_active")
+  ageGroups       String[] @default(["all"]) @map("age_groups")
+  tags            String[] @default([])
+  requirements    Json?
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@map("challenges")
+}

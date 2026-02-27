@@ -51,14 +51,14 @@ interface QuizSubmission {
 }
 
 class ModuleService {
-  private baseURL = process.env.REACT_APP_API_URL || 'http://localhost:3001/api';
+  private baseURL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
 
   private async request<T>(
     endpoint: string,
     options: RequestInit = {}
   ): Promise<T> {
     const token = localStorage.getItem('authToken');
-    
+
     const config: RequestInit = {
       headers: {
         'Content-Type': 'application/json',
@@ -160,7 +160,7 @@ class ModuleService {
     skills?: string[];
   }): Promise<Module[]> {
     const searchParams = new URLSearchParams({ q: query });
-    
+
     if (filters) {
       Object.entries(filters).forEach(([key, value]) => {
         if (value) {

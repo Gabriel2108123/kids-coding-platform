@@ -1,7 +1,7 @@
 // @ts-nocheck
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
-import { User } from '../models';
+import prisma from '../prisma';
 
 interface DecodedToken {
     userId: string;
@@ -20,14 +20,14 @@ export const authMiddleware = async (req: Request, res: Response, next: NextFunc
     try {
         // Get token from header or cookie
         let token = req.header('Authorization')?.replace('Bearer ', '');
-        
+
         // Fallback to cookie for browser requests
         if (!token && req.cookies?.token) {
             token = req.cookies.token;
         }
 
         if (!token) {
-            return res.status(401).json({ 
+            return res.status(401).json({
                 success: false,
                 message: 'No authentication token provided',
                 code: 'NO_TOKEN'
@@ -36,17 +36,17 @@ export const authMiddleware = async (req: Request, res: Response, next: NextFunc
 
         // Verify token
         const decoded = jwt.verify(
-            token, 
+            token,
             process.env.JWT_SECRET || 'fallback_secret_change_in_production'
         ) as DecodedToken;
-        
+
         // Check if user exists and is active
-        const user = await User.findById(decoded.userId)
-            .populate('progress.badges', 'name category rarity')
-            .select('-password');
+        const user = await prisma.user.findUnique({
+            where: { id: decoded.userId }
+        });
 
         if (!user) {
-            return res.status(401).json({ 
+            return res.status(401).json({
                 success: false,
                 message: 'User not found',
                 code: 'USER_NOT_FOUND'
@@ -54,22 +54,26 @@ export const authMiddleware = async (req: Request, res: Response, next: NextFunc
         }
 
         if (!user.isActive) {
-            return res.status(401).json({ 
+            return res.status(401).json({
                 success: false,
                 message: 'Account is deactivated',
                 code: 'ACCOUNT_DEACTIVATED'
             });
         }
 
+        const userCoppa = (user.coppa as any) || {};
+        const userSafety = (user.safety as any) || {};
+        const userProgress = (user.progress as any) || {};
+
         // COPPA compliance checks for users under 13
-        if (user.coppa.requiresParentalConsent && !user.coppa.parentalConsent) {
+        if (userCoppa.requiresParentalConsent && !userCoppa.parentalConsent) {
             // Allow access only to consent-related endpoints
             const allowedPaths = [
                 '/api/users/parental-consent',
                 '/api/users/profile',
                 '/api/auth/logout'
             ];
-            
+
             if (!allowedPaths.some(path => req.path.includes(path))) {
                 return res.status(403).json({
                     success: false,
@@ -77,15 +81,15 @@ export const authMiddleware = async (req: Request, res: Response, next: NextFunc
                     code: 'PARENTAL_CONSENT_REQUIRED',
                     data: {
                         requiresParentalConsent: true,
-                        parentEmail: user.coppa.parentEmail
+                        parentEmail: userCoppa.parentEmail
                     }
                 });
             }
         }
 
         // Check for suspended/banned users
-        if (user.safety?.isSuspended) {
-            const suspensionEnd = user.safety.suspensionEnd;
+        if (userSafety.isSuspended) {
+            const suspensionEnd = userSafety.suspensionEnd;
             if (!suspensionEnd || suspensionEnd > new Date()) {
                 return res.status(403).json({
                     success: false,
@@ -93,27 +97,34 @@ export const authMiddleware = async (req: Request, res: Response, next: NextFunc
                     code: 'ACCOUNT_SUSPENDED',
                     data: {
                         suspensionEnd: suspensionEnd,
-                        reason: user.safety.suspensionReason
+                        reason: userSafety.suspensionReason
                     }
                 });
             } else {
                 // Suspension expired, clear it
-                user.safety.isSuspended = false;
-                user.safety.suspensionEnd = undefined;
-                user.safety.suspensionReason = undefined;
-                await user.save();
+                userSafety.isSuspended = false;
+                userSafety.suspensionEnd = undefined;
+                userSafety.suspensionReason = undefined;
+
+                await prisma.user.update({
+                    where: { id: user.id },
+                    data: { safety: userSafety }
+                });
             }
         }
 
         // Update last activity for active users
         const now = new Date();
-        const lastActivity = user.progress.lastActiveDate;
+        const lastActivity = userProgress.lastActiveDate ? new Date(userProgress.lastActiveDate) : new Date(0);
         const timeDiff = now.getTime() - lastActivity.getTime();
-        
+
         // Update if more than 5 minutes have passed
         if (timeDiff > 5 * 60 * 1000) {
-            user.progress.lastActiveDate = now;
-            await user.save();
+            userProgress.lastActiveDate = now;
+            await prisma.user.update({
+                where: { id: user.id },
+                data: { progress: userProgress }
+            });
         }
 
         // Add user and decoded token info to request
@@ -125,15 +136,15 @@ export const authMiddleware = async (req: Request, res: Response, next: NextFunc
 
     } catch (error) {
         if (error.name === 'TokenExpiredError') {
-            return res.status(401).json({ 
+            return res.status(401).json({
                 success: false,
                 message: 'Authentication token has expired',
                 code: 'TOKEN_EXPIRED'
             });
         }
-        
+
         if (error.name === 'JsonWebTokenError') {
-            return res.status(401).json({ 
+            return res.status(401).json({
                 success: false,
                 message: 'Invalid authentication token',
                 code: 'INVALID_TOKEN'
@@ -141,7 +152,7 @@ export const authMiddleware = async (req: Request, res: Response, next: NextFunc
         }
 
         console.error('Auth middleware error:', error);
-        res.status(500).json({ 
+        res.status(500).json({
             success: false,
             message: 'Authentication error',
             code: 'AUTH_ERROR'
@@ -164,7 +175,7 @@ export const requireRole = (roles: string | string[]) => {
         }
 
         const allowedRoles = Array.isArray(roles) ? roles : [roles];
-        
+
         if (!allowedRoles.includes(req.user.role)) {
             return res.status(403).json({
                 success: false,
@@ -196,7 +207,7 @@ export const requireAgeGroup = (ageGroups: string | string[]) => {
         }
 
         const allowedAgeGroups = Array.isArray(ageGroups) ? ageGroups : [ageGroups];
-        
+
         if (!allowedAgeGroups.includes(req.user.ageGroup)) {
             return res.status(403).json({
                 success: false,
@@ -226,13 +237,14 @@ export const requireParentalConsent = (req: Request, res: Response, next: NextFu
         });
     }
 
-    if (req.user.coppa.requiresParentalConsent && !req.user.coppa.parentalConsent) {
+    const userCoppa = (req.user.coppa as any) || {};
+    if (userCoppa.requiresParentalConsent && !userCoppa.parentalConsent) {
         return res.status(403).json({
             success: false,
             message: 'Parental consent required for this action',
             code: 'PARENTAL_CONSENT_REQUIRED',
             data: {
-                parentEmail: req.user.coppa.parentEmail
+                parentEmail: userCoppa.parentEmail
             }
         });
     }
@@ -254,8 +266,9 @@ export const requireFeatureAccess = (feature: string) => {
             });
         }
 
-        const allowedFeatures = req.user.safety?.parentalControls?.allowedFeatures || [];
-        
+        const userSafety = (req.user.safety as any) || {};
+        const allowedFeatures = userSafety.parentalControls?.allowedFeatures || [];
+
         if (!allowedFeatures.includes(feature)) {
             return res.status(403).json({
                 success: false,
@@ -285,7 +298,8 @@ export const checkTimeLimit = async (req: Request, res: Response, next: NextFunc
         });
     }
 
-    const timeLimit = req.user.safety?.parentalControls?.timeLimit;
+    const userSafety = (req.user.safety as any) || {};
+    const timeLimit = userSafety.parentalControls?.timeLimit;
     if (!timeLimit) {
         return next();
     }
@@ -293,8 +307,9 @@ export const checkTimeLimit = async (req: Request, res: Response, next: NextFunc
     // Calculate time spent today
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    
-    const timeSpentToday = req.user.progress.timeSpentLearning || 0;
+
+    const userProgress = (req.user.progress as any) || {};
+    const timeSpentToday = userProgress.timeSpentLearning || 0;
     const timeLimitMinutes = timeLimit * 60 * 1000; // Convert to milliseconds
 
     if (timeSpentToday >= timeLimitMinutes) {
@@ -323,12 +338,13 @@ export const optionalAuth = async (req: Request, res: Response, next: NextFuncti
 
         if (token) {
             const decoded = jwt.verify(
-                token, 
+                token,
                 process.env.JWT_SECRET || 'fallback_secret_change_in_production'
             ) as DecodedToken;
-            
-            const user = await User.findById(decoded.userId)
-                .select('-password');
+
+            const user = await prisma.user.findUnique({
+                where: { id: decoded.userId }
+            });
 
             if (user && user.isActive) {
                 // @ts-ignore - Express type augmentation will handle this
@@ -377,13 +393,14 @@ export const requireSafeContentAccess = (req: Request, res: Response, next: Next
     }
 
     // Check content filter level
-    const contentFilter = req.user.safety?.contentFilter || 'moderate';
-    
+    const userSafety = (req.user.safety as any) || {};
+    const contentFilter = userSafety.contentFilter || 'moderate';
+
     // Add content filter info to request for use by controllers
     // @ts-ignore - Express type augmentation will handle this
     req.contentFilter = contentFilter;
     // @ts-ignore - Express type augmentation will handle this
-    req.isChildUser = req.user.coppa.requiresParentalConsent;
-    
+    req.isChildUser = ((req.user.coppa as any) || {}).requiresParentalConsent;
+
     next();
 };

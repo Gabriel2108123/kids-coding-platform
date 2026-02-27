@@ -1,24 +1,20 @@
 import { Request as ExpressRequest, Response as ExpressResponse } from 'express';
-import { IUser } from '../models/User';
-import { IBadge } from '../models/Badge';
-import { IChallenge } from '../models/Challenge';
-import { IModule } from '../models/Module';
-import { IProject } from '../models/Project';
+import { User as PrismaUser, Challenge as PrismaChallenge, Project as PrismaProject, Module as PrismaModule, Badge as PrismaBadge } from '@prisma/client';
 
 declare global {
     namespace Express {
         interface Request {
             // User authentication
-            user?: IUser;
+            user?: PrismaUser;
             userId?: string;
-            
+
             // Pagination parameters (commonly used across controllers)
             pagination?: {
                 page: number;
                 limit: number;
                 skip: number;
             };
-            
+
             // Search and filtering parameters
             filters?: {
                 difficulty?: 'beginner' | 'intermediate' | 'advanced';
@@ -30,12 +26,12 @@ declare global {
                     end: Date;
                 };
             };
-            
+
             // File upload information (for project assets, profile pictures, etc.)
             files?: {
                 [fieldname: string]: Express.Multer.File[] | Express.Multer.File;
             };
-            
+
             // Request context for analytics and logging
             context?: {
                 requestId: string;
@@ -45,7 +41,7 @@ declare global {
                 route: string;
                 method: string;
             };
-            
+
             // Validation results
             validationErrors?: Array<{
                 field: string;
@@ -59,38 +55,38 @@ declare global {
                 resetTime: Date;
                 limit: number;
             };
-            
+
             // Feature flags for A/B testing or gradual rollouts
             features?: {
                 [key: string]: boolean;
             };
-            
+
             // Cached data to avoid repeated database queries
             cache?: {
-                user?: IUser;
-                userBadges?: IBadge[];
-                userProjects?: IProject[];
-                enrolledModules?: IModule[];
-                completedChallenges?: IChallenge[];
+                user?: PrismaUser;
+                userBadges?: any[];
+                userProjects?: any[];
+                enrolledModules?: any[];
+                completedChallenges?: any[];
             };
         }
-        
+
         interface Response {
             // Standard API response format
             apiResponse?: (data: any, message?: string, statusCode?: number) => ExpressResponse;
-            
+
             // Error response format
             apiError?: (error: string | Error, statusCode?: number, details?: any) => ExpressResponse;
-            
+
             // Pagination response helper
             paginatedResponse?: (
-                data: any[], 
-                total: number, 
-                page: number, 
+                data: any[],
+                total: number,
+                page: number,
                 limit: number,
                 message?: string
             ) => ExpressResponse;
-            
+
             // XP calculation response helper
             xpResponse?: (
                 xpData: {
@@ -107,7 +103,7 @@ declare global {
 
 // Additional type definitions for common request/response patterns
 export interface AuthenticatedRequest extends ExpressRequest {
-    user: IUser; // Non-optional user for authenticated routes
+    user: PrismaUser; // Non-optional user for authenticated routes
     userId: string;
 }
 
@@ -175,7 +171,7 @@ export interface XPResponse extends ApiResponse {
 // Challenge-specific response types
 export interface ChallengeResponse extends ApiResponse {
     data: {
-        challenge: IChallenge;
+        challenge: PrismaChallenge;
         userProgress?: {
             attempts: number;
             bestScore: number;
@@ -195,7 +191,7 @@ export interface ChallengeResponse extends ApiResponse {
 // Project-specific response types
 export interface ProjectResponse extends ApiResponse {
     data: {
-        project: IProject;
+        project: PrismaProject;
         permissions?: {
             canEdit: boolean;
             canDelete: boolean;
@@ -214,7 +210,7 @@ export interface ProjectResponse extends ApiResponse {
 // Module-specific response types
 export interface ModuleResponse extends ApiResponse {
     data: {
-        module: IModule;
+        module: PrismaModule;
         progress?: {
             lessonsCompleted: number;
             totalLessons: number;
@@ -232,13 +228,13 @@ export interface ModuleResponse extends ApiResponse {
 // Badge-specific response types
 export interface BadgeResponse extends ApiResponse {
     data: {
-        badge: IBadge;
+        badge: PrismaBadge;
         progress?: {
             current: number;
             required: number;
             percentComplete: number;
         };
         earnedAt?: Date;
-        nextBadges?: IBadge[];
+        nextBadges?: PrismaBadge[];
     };
 }

@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
-import { User } from '../models';
+import prisma from '../prisma';
 import { AuthenticatedRequest } from '../types/express';
 import { calculateXP } from '../services/xpCalculator';
 import { getAgeGroup } from '../constants/coppa';
@@ -12,10 +12,10 @@ import { getAgeGroup } from '../constants/coppa';
 
 export const registerUser = async (req: Request, res: Response) => {
     try {
-        const { 
-            username, 
-            email, 
-            password, 
+        const {
+            username,
+            email,
+            password,
             dateOfBirth,
             parentEmail,
             displayName,
@@ -69,9 +69,15 @@ export const registerUser = async (req: Request, res: Response) => {
         }
 
         // Check if user exists
-        const existingUser = await User.findOne({ 
-            $or: [{ email }, { username }] 
+        const existingUser = await prisma.user.findFirst({
+            where: {
+                OR: [
+                    { email },
+                    { username }
+                ]
+            }
         });
+
         if (existingUser) {
             return res.status(400).json({
                 success: false,
@@ -104,7 +110,7 @@ export const registerUser = async (req: Request, res: Response) => {
             role: role, // Use the role from request instead of hardcoded 'student'
             preferredLanguage,
             timezone: 'UTC',
-            
+
             // COPPA compliance
             coppa: {
                 requiresParentalConsent,
@@ -132,7 +138,7 @@ export const registerUser = async (req: Request, res: Response) => {
                 learningPath: [],
                 moduleProgress: {}
             };
-            
+
             userData.settings = {
                 notifications: {
                     email: true,
@@ -161,7 +167,7 @@ export const registerUser = async (req: Request, res: Response) => {
                     reminderTime: '09:00'
                 }
             };
-            
+
             userData.safety = {
                 contentFilter: 'moderate',
                 blockedUsers: [],
@@ -188,7 +194,7 @@ export const registerUser = async (req: Request, res: Response) => {
                 skillsProgress: {},
                 moduleProgress: {}
             };
-            
+
             userData.settings = {
                 notifications: {
                     email: !requiresParentalConsent,
@@ -217,7 +223,7 @@ export const registerUser = async (req: Request, res: Response) => {
                     reminderTime: '16:00'
                 }
             };
-            
+
             userData.safety = {
                 contentFilter: requiresParentalConsent ? 'strict' : 'moderate',
                 blockedUsers: [],
@@ -230,45 +236,67 @@ export const registerUser = async (req: Request, res: Response) => {
             };
         }
 
-        const user = new User(userData);
-
-        await user.save();
+        // Create user with role-specific configuration
+        const user = await prisma.user.create({
+            data: {
+                username,
+                email,
+                passwordHash: hashedPassword,
+                firstName: displayName || username,
+                dateOfBirth: birthDate, // Ensure dateOfBirth is stored
+                age,
+                ageGroup: ageGroup, // Store ageGroup
+                skillLevel: 'beginner',
+                role,
+                xp: 0,
+                level: 1,
+                coppa: userData.coppa as any,
+                progress: userData.progress as any,
+                settings: userData.settings as any,
+                safety: userData.safety as any,
+                auth: {
+                    lastLoginAt: new Date()
+                } as any
+            }
+        });
 
         // Generate JWT with appropriate expiration
         const tokenExpiration = requiresParentalConsent ? '2h' : '24h';
         const token = jwt.sign(
-            { 
-                userId: user._id,
+            {
+                userId: user.id,
                 role: user.role,
                 ageGroup: user.ageGroup,
-                requiresParentalConsent 
+                requiresParentalConsent
             },
             process.env.JWT_SECRET || 'fallback_secret_change_in_production',
             { expiresIn: tokenExpiration }
         );
 
-        // Response data (filtered for safety)
         const responseUser = {
-            id: user._id,
+            id: user.id,
             username: user.username,
-            displayName: user.displayName,
+            displayName: user.firstName,
             ageGroup: user.ageGroup,
             role: user.role,
-            preferredLanguage: user.preferredLanguage,
+            avatar: user.avatarUrl,
+            preferredLanguage: (user.settings as any)?.preferredLanguage || 'en',
+            age: user.age,
+            ageGroup_actual: user.ageGroup,
             requiresParentalConsent,
             settings: user.settings,
             progress: {
-                totalXP: user.progress.totalXP,
-                currentLevel: user.progress.currentLevel,
-                badges: user.progress.badges.length,
-                completedModules: user.progress.completedModules.length
+                totalXP: (user.progress as any)?.totalXP || 0,
+                currentLevel: (user.progress as any)?.currentLevel || 1,
+                badges: (user.progress as any)?.badges?.length || 0,
+                completedModules: (user.progress as any)?.completedModules?.length || 0
             }
         };
 
         return res.status(201).json({
             success: true,
-            message: requiresParentalConsent 
-                ? 'Account created! Parental consent required to continue.' 
+            message: requiresParentalConsent
+                ? 'Account created! Parental consent required to continue.'
                 : 'Account created successfully!',
             data: {
                 token,
@@ -289,25 +317,15 @@ export const registerUser = async (req: Request, res: Response) => {
                 hasDateOfBirth: !!req.body.dateOfBirth
             }
         });
-        
+
         // More specific error messages based on error type
-        if (error instanceof Error && error.name === 'ValidationError') {
-            const validationError = error as unknown as { errors: Record<string, unknown> };
-            return res.status(400).json({
-                success: false,
-                message: 'Validation error: ' + error.message,
-                errors: validationError.errors
-            });
-        }
-        
-        const mongoError = error as { code?: number };
-        if (error instanceof Error && mongoError.code === 11000) {
+        if (error && (error as any).code === 'P2002') {
             return res.status(400).json({
                 success: false,
                 message: 'User already exists with this email or username'
             });
         }
-        
+
         return res.status(500).json({
             success: false,
             message: 'Server error during registration: ' + (error instanceof Error ? error.message : String(error))
@@ -327,10 +345,10 @@ export const loginUser = async (req: Request, res: Response) => {
             });
         }
 
-        // Find user and populate necessary fields
-        const user = await User.findOne({ email })
-            .populate('progress.badges', 'name iconUrl category rarity')
-            .select('+password');
+        // Find user
+        const user = await prisma.user.findUnique({
+            where: { email }
+        });
 
         if (!user) {
             return res.status(401).json({
@@ -348,7 +366,7 @@ export const loginUser = async (req: Request, res: Response) => {
         }
 
         // Check password
-        const isMatch = await bcrypt.compare(password, user.password);
+        const isMatch = await bcrypt.compare(password, (user as any).passwordHash);
         if (!isMatch) {
             return res.status(401).json({
                 success: false,
@@ -356,68 +374,65 @@ export const loginUser = async (req: Request, res: Response) => {
             });
         }
 
-        // Update last login
-        user.auth.lastLoginAt = new Date();
-        
-        // Update streak if appropriate
+        // Update last login and streak
+        const userAuth = (user.auth as any) || {};
+        userAuth.last_login_at = new Date();
+
+        const userProgress = (user.progress as any) || {};
         const today = new Date();
-        const lastActive = user.progress.lastActiveDate;
-        
+        const lastActive = userProgress.lastActiveDate ? new Date(userProgress.lastActiveDate) : null;
+
         if (lastActive) {
             const daysDifference = Math.floor((today.getTime() - lastActive.getTime()) / (1000 * 60 * 60 * 24));
-            
             if (daysDifference === 1) {
-                // Consecutive day - increment streak
-                user.progress.streakDays += 1;
+                userProgress.streakDays = (userProgress.streakDays || 0) + 1;
             } else if (daysDifference > 1) {
-                // Streak broken - reset
-                user.progress.streakDays = 1;
+                userProgress.streakDays = 1;
             }
-            // If daysDifference === 0, same day login, don't change streak
         } else {
-            // First time login or no previous active date - start streak
-            user.progress.streakDays = 1;
+            userProgress.streakDays = 1;
         }
-        
-        user.progress.lastActiveDate = today;
-        await user.save();
+        userProgress.lastActiveDate = today;
 
-        // Generate JWT
-        const tokenExpiration = rememberMe ? '30d' : (user.coppa.requiresParentalConsent ? '2h' : '24h');
+        await prisma.user.update({
+            where: { id: user.id },
+            data: {
+                auth: userAuth,
+                progress: userProgress
+            }
+        });
+
+        const userCoppa = (user.coppa as any) || {};
+        const tokenExpiration = rememberMe ? '30d' : (userCoppa.requiresParentalConsent ? '2h' : '24h');
         const token = jwt.sign(
-            { 
-                userId: user._id,
+            {
+                userId: user.id,
                 role: user.role,
-                ageGroup: user.ageGroup,
-                requiresParentalConsent: user.coppa.requiresParentalConsent
+                ageGroup: user.ageGroup, // Assuming available in scope or needs to be calculated
+                requiresParentalConsent: userCoppa.requiresParentalConsent
             },
             process.env.JWT_SECRET || 'fallback_secret_change_in_production',
             { expiresIn: tokenExpiration }
         );
 
         // Prepare response data
+        const userCoppa_login = (user.coppa as any) || {};
+        const userProgress_login = (user.progress as any) || {};
+
         const responseUser = {
-            id: user._id,
+            id: user.id,
             username: user.username,
-            displayName: user.displayName,
+            displayName: user.firstName,
             email: user.email,
-            ageGroup: user.ageGroup,
+            age: user.age,
             role: user.role,
-            avatar: user.avatar,
-            preferredLanguage: user.preferredLanguage,
+            avatar: user.avatarUrl,
+            xp: user.xp,
+            level: user.level,
             settings: user.settings,
-            progress: {
-                totalXP: user.progress.totalXP,
-                currentLevel: user.progress.currentLevel,
-                streakDays: user.progress.streakDays,
-                badges: user.progress.badges,
-                completedModules: user.progress.completedModules.length,
-                completedChallenges: user.progress.completedChallenges.length,
-                timeSpentLearning: user.progress.timeSpentLearning
-            },
+            progress: userProgress_login,
             safety: user.safety,
-            requiresParentalConsent: user.coppa.requiresParentalConsent,
-            hasParentalConsent: user.coppa.parentalConsent
+            coppa: userCoppa_login
         };
 
         return res.json({
@@ -448,8 +463,14 @@ export const loginUser = async (req: Request, res: Response) => {
 export const logoutUser = async (req: AuthenticatedRequest, res: Response) => {
     try {
         // Update last logout time
-        await User.findByIdAndUpdate(req.user._id, {
-            lastLogoutAt: new Date()
+        await prisma.user.update({
+            where: { id: req.user.id },
+            data: {
+                auth: {
+                    ...(req.user.auth as any), // Merge with existing auth data
+                    last_logout_at: new Date()
+                } as any
+            }
         });
 
         return res.json({
@@ -471,11 +492,9 @@ export const logoutUser = async (req: AuthenticatedRequest, res: Response) => {
 
 export const getUserProfile = async (req: AuthenticatedRequest, res: Response) => {
     try {
-        const user = await User.findById(req.user._id)
-            .populate('progress.badges', 'name description iconUrl category rarity')
-            .populate('progress.completedModules', 'title difficulty category')
-            .populate('progress.completedChallenges', 'title difficulty category')
-            .select('-password');
+        const user = await prisma.user.findUnique({
+            where: { id: req.user.id }
+        });
 
         if (!user) {
             return res.status(404).json({
@@ -484,31 +503,34 @@ export const getUserProfile = async (req: AuthenticatedRequest, res: Response) =
             });
         }
 
+        const userProgress = (user.progress as any) || {};
+        const userCoppa = (user.coppa as any) || {};
+
         // Prepare response data
         const responseUser = {
-            id: user._id,
+            id: user.id,
             username: user.username,
-            displayName: user.displayName,
+            displayName: user.firstName,
             email: user.email,
             dateOfBirth: user.dateOfBirth,
             age: user.age,
             ageGroup: user.ageGroup,
             role: user.role,
-            avatar: user.avatar,
-            preferredLanguage: user.preferredLanguage,
+            avatar: user.avatarUrl,
+            preferredLanguage: (user.settings as any)?.preferredLanguage || 'en',
             settings: user.settings,
             progress: {
-                totalXP: user.progress.totalXP,
-                currentLevel: user.progress.currentLevel,
-                streakDays: user.progress.streakDays,
-                badges: user.progress.badges,
-                completedModules: user.progress.completedModules.length,
-                completedChallenges: user.progress.completedChallenges.length,
-                timeSpentLearning: user.progress.timeSpentLearning
+                totalXP: user.xp,
+                currentLevel: user.level,
+                streakDays: userProgress.streakDays || 0,
+                badges: userProgress.badges || [],
+                completedModules: userProgress.completedModules?.length || 0,
+                completedChallenges: userProgress.completedChallenges?.length || 0,
+                timeSpentLearning: userProgress.timeSpentLearning || 0
             },
             safety: user.safety,
-            requiresParentalConsent: user.coppa.requiresParentalConsent,
-            hasParentalConsent: user.coppa.parentalConsent
+            requiresParentalConsent: userCoppa.requiresParentalConsent,
+            hasParentalConsent: userCoppa.parentalConsent
         };
 
         return res.json({
@@ -527,27 +549,34 @@ export const getUserProfile = async (req: AuthenticatedRequest, res: Response) =
 
 export const updateUserProfile = async (req: AuthenticatedRequest, res: Response) => {
     try {
-        const { 
-            displayName, 
-            firstName, 
-            lastName, 
-            email, 
-            phone, 
-            familyName, 
-            preferredLanguage, 
+        const {
+            displayName,
+            firstName,
+            lastName,
+            email,
+            phone,
+            familyName,
+            preferredLanguage,
             avatar,
             currentPassword,
-            newPassword 
+            newPassword,
+            age,
+            gender,
+            bio
         } = req.body;
-        const userId = req.user._id;
+        const userId = req.user.id;
 
-        const user = await User.findById(userId);
+        const user = await prisma.user.findUnique({
+            where: { id: userId }
+        });
         if (!user) {
             return res.status(404).json({
                 success: false,
                 message: 'User not found'
             });
         }
+
+        const updateData: any = {};
 
         // Handle password change if requested
         if (newPassword) {
@@ -559,7 +588,7 @@ export const updateUserProfile = async (req: AuthenticatedRequest, res: Response
             }
 
             // Verify current password
-            const isValidPassword = await bcrypt.compare(currentPassword, user.password);
+            const isValidPassword = await bcrypt.compare(currentPassword, user.passwordHash);
             if (!isValidPassword) {
                 return res.status(400).json({
                     success: false,
@@ -576,51 +605,63 @@ export const updateUserProfile = async (req: AuthenticatedRequest, res: Response
             }
 
             // Hash new password
-            const salt = await bcrypt.genSalt(12);
-            user.password = await bcrypt.hash(newPassword, salt);
+            updateData.passwordHash = await bcrypt.hash(newPassword, 12);
         }
 
         // Update profile fields
-        if (displayName) user.displayName = displayName;
-        if (firstName) user.firstName = firstName;
-        if (lastName) user.lastName = lastName;
-        if (email) {
+        if (displayName !== undefined) updateData.firstName = displayName;
+        if (firstName !== undefined) updateData.firstName = firstName; // Assuming firstName is used for display
+        if (lastName !== undefined) updateData.lastName = lastName;
+        if (email !== undefined) {
             // Check if email is already taken by another user
-            const existingUser = await User.findOne({ email, _id: { $ne: userId } });
+            const existingUser = await prisma.user.findFirst({
+                where: {
+                    email,
+                    NOT: { id: userId }
+                }
+            });
             if (existingUser) {
                 return res.status(400).json({
                     success: false,
                     message: 'Email is already taken by another user'
                 });
             }
-            user.email = email;
+            updateData.email = email;
         }
-        if (phone !== undefined) user.phone = phone; // Allow empty string
-        if (familyName !== undefined) user.familyName = familyName; // Allow empty string
-        if (preferredLanguage) user.preferredLanguage = preferredLanguage;
-        if (avatar) user.avatar = avatar;
+        if (phone !== undefined) updateData.phone = phone; // Allow empty string
+        if (familyName !== undefined) updateData.family_name = familyName; // Allow empty string
+        if (preferredLanguage !== undefined) {
+            updateData.settings = { ...(user.settings as any), preferredLanguage };
+        }
+        if (avatar !== undefined) updateData.avatarUrl = avatar;
+        if (age !== undefined) updateData.age = age;
+        if (gender !== undefined) updateData.gender = gender;
+        if (bio !== undefined) updateData.bio = bio;
 
-        await user.save();
+        const updatedUser = await prisma.user.update({
+            where: { id: userId },
+            data: updateData
+        });
 
-        // Return updated user data (same format as getUserProfile)
+        const userCoppa = (updatedUser.coppa as any) || {};
         const responseUser = {
-            id: user._id,
-            username: user.username,
-            displayName: user.displayName,
-            firstName: user.firstName,
-            lastName: user.lastName,
-            email: user.email,
-            phone: user.phone,
-            familyName: user.familyName,
-            dateOfBirth: user.dateOfBirth,
-            age: user.age,
-            ageGroup: user.ageGroup,
-            role: user.role,
-            avatar: user.avatar,
-            preferredLanguage: user.preferredLanguage,
-            settings: user.settings,
-            requiresParentalConsent: user.coppa?.requiresParentalConsent,
-            hasParentalConsent: user.coppa?.parentalConsent
+            id: updatedUser.id,
+            username: updatedUser.username,
+            displayName: updatedUser.firstName,
+            firstName: updatedUser.firstName,
+            lastName: updatedUser.lastName,
+            email: updatedUser.email,
+            phone: (updatedUser as any).phone,
+            familyName: (updatedUser as any).family_name,
+            dateOfBirth: updatedUser.dateOfBirth,
+            age: updatedUser.age,
+            ageGroup: updatedUser.ageGroup, // Calculated or stored
+            role: updatedUser.role,
+            avatar: updatedUser.avatarUrl,
+            preferredLanguage: (updatedUser.settings as any)?.preferredLanguage || 'en',
+            settings: updatedUser.settings,
+            requiresParentalConsent: userCoppa.requiresParentalConsent,
+            hasParentalConsent: userCoppa.parentalConsent
         };
 
         return res.json({
@@ -640,9 +681,11 @@ export const updateUserProfile = async (req: AuthenticatedRequest, res: Response
 export const updateUserSettings = async (req: AuthenticatedRequest, res: Response) => {
     try {
         const { notifications, privacy, accessibility, learning } = req.body;
-        const userId = req.user._id;
+        const userId = req.user.id;
 
-        const user = await User.findById(userId);
+        const user = await prisma.user.findUnique({
+            where: { id: userId }
+        });
         if (!user) {
             return res.status(404).json({
                 success: false,
@@ -650,40 +693,47 @@ export const updateUserSettings = async (req: AuthenticatedRequest, res: Respons
             });
         }
 
+        const currentSettings = (user.settings as any) || {};
+        const updatedSettings: any = { ...currentSettings };
+
         // Update settings with validation
         if (notifications) {
-            user.settings.notifications = { ...user.settings.notifications, ...notifications };
+            updatedSettings.notifications = { ...currentSettings.notifications, ...notifications };
         }
-        
+
         if (privacy) {
+            const userCoppa = (user.coppa as any) || {};
             // For users under 13, maintain stricter privacy defaults
-            if (user.coppa.requiresParentalConsent) {
-                user.settings.privacy = {
-                    ...user.settings.privacy,
+            if (userCoppa.requiresParentalConsent) {
+                updatedSettings.privacy = {
+                    ...currentSettings.privacy,
                     showProgress: privacy.showProgress || false,
                     allowFriendRequests: false,
                     showOnLeaderboard: privacy.showOnLeaderboard || false,
                     allowProjectSharing: false
                 };
             } else {
-                user.settings.privacy = { ...user.settings.privacy, ...privacy };
+                updatedSettings.privacy = { ...currentSettings.privacy, ...privacy };
             }
         }
-        
+
         if (accessibility) {
-            user.settings.accessibility = { ...user.settings.accessibility, ...accessibility };
-        }
-        
-        if (learning) {
-            user.settings.learning = { ...user.settings.learning, ...learning };
+            updatedSettings.accessibility = { ...currentSettings.accessibility, ...accessibility };
         }
 
-        await user.save();
+        if (learning) {
+            updatedSettings.learning = { ...currentSettings.learning, ...learning };
+        }
+
+        const updatedUser = await prisma.user.update({
+            where: { id: userId },
+            data: { settings: updatedSettings }
+        });
 
         return res.json({
             success: true,
             message: 'Settings updated successfully',
-            data: { settings: user.settings }
+            data: { settings: updatedUser.settings }
         });
     } catch (error) {
         console.error('Update settings error:', error);
@@ -698,20 +748,33 @@ export const updateUserSettings = async (req: AuthenticatedRequest, res: Respons
 // PROGRESS TRACKING AND XP MANAGEMENT
 // ==========================================
 
+export const deleteUserAccount = async (req: AuthenticatedRequest, res: Response) => {
+    try {
+        await prisma.user.delete({ where: { id: req.user.id } });
+        return res.json({ success: true, message: 'Account deleted successfully' });
+    } catch (error) {
+        console.error('Delete account error:', error);
+        return res.status(500).json({ success: false, message: 'Failed to delete account' });
+    }
+};
+
 export const updateUserProgress = async (req: AuthenticatedRequest, res: Response) => {
     try {
-        const { 
-            xpEarned, 
-            activityType, 
-            activityId: _activityId, 
-            timeSpent, 
+        const {
+            xpEarned,
+            activityType,
+            activityId: _activityId,
+            timeSpent,
             skillsImproved = [],
             completedChallenge,
             completedModule,
-            completedProject 
+            completedProject
         } = req.body;
 
-        const user = await User.findById(req.user._id);
+        const user = await prisma.user.findUnique({
+            where: { id: req.user.id }
+        });
+
         if (!user) {
             return res.status(404).json({
                 success: false,
@@ -721,21 +784,22 @@ export const updateUserProgress = async (req: AuthenticatedRequest, res: Respons
 
         let totalXPGained = 0;
         const achievements = [];
+        const userProgress = (user.progress as any) || {};
 
         // Calculate XP with age-based multipliers
         if (xpEarned && activityType) {
             const calculatedResult = calculateXP(activityType, {
-                ageGroup: user.ageGroup,
+                ageGroup: user.ageGroup, // Assuming ageGroup is available
                 timeSpent
             });
-            user.progress.totalXP += calculatedResult.xp;
+            user.xp += calculatedResult.xp; // Update user's direct xp field
             totalXPGained = calculatedResult.xp;
         }
 
         // Update level based on XP
-        const newLevel = Math.floor(user.progress.totalXP / 100) + 1;
-        if (newLevel > user.progress.currentLevel) {
-            user.progress.currentLevel = newLevel;
+        const newLevel = Math.floor(user.xp / 100) + 1;
+        if (newLevel > user.level) {
+            user.level = newLevel;
             achievements.push({
                 type: 'level_up',
                 level: newLevel,
@@ -746,18 +810,20 @@ export const updateUserProgress = async (req: AuthenticatedRequest, res: Respons
 
         // Update time spent learning
         if (timeSpent) {
-            user.progress.timeSpentLearning += timeSpent;
+            userProgress.timeSpentLearning = (userProgress.timeSpentLearning || 0) + timeSpent;
         }
 
         // Update skills progress
+        if (!userProgress.skillsProgress) userProgress.skillsProgress = {};
         skillsImproved.forEach((skill: string) => {
-            const currentProgress = user.progress.skillsProgress.get(skill) || 0;
-            user.progress.skillsProgress.set(skill, currentProgress + 1);
+            const currentProgress = userProgress.skillsProgress[skill] || 0;
+            userProgress.skillsProgress[skill] = currentProgress + 1;
         });
 
         // Add completed items
-        if (completedChallenge && !user.progress.completedChallenges.includes(completedChallenge)) {
-            user.progress.completedChallenges.push(completedChallenge);
+        if (!userProgress.completedChallenges) userProgress.completedChallenges = [];
+        if (completedChallenge && !userProgress.completedChallenges.includes(completedChallenge)) {
+            userProgress.completedChallenges.push(completedChallenge);
             achievements.push({
                 type: 'challenge_completed',
                 challengeId: completedChallenge,
@@ -766,8 +832,9 @@ export const updateUserProgress = async (req: AuthenticatedRequest, res: Respons
             });
         }
 
-        if (completedModule && !user.progress.completedModules.includes(completedModule)) {
-            user.progress.completedModules.push(completedModule);
+        if (!userProgress.completedModules) userProgress.completedModules = [];
+        if (completedModule && !userProgress.completedModules.includes(completedModule)) {
+            userProgress.completedModules.push(completedModule);
             achievements.push({
                 type: 'module_completed',
                 moduleId: completedModule,
@@ -776,8 +843,9 @@ export const updateUserProgress = async (req: AuthenticatedRequest, res: Respons
             });
         }
 
-        if (completedProject && !user.progress.completedProjects.includes(completedProject)) {
-            user.progress.completedProjects.push(completedProject);
+        if (!userProgress.completedProjects) userProgress.completedProjects = [];
+        if (completedProject && !userProgress.completedProjects.includes(completedProject)) {
+            userProgress.completedProjects.push(completedProject);
             achievements.push({
                 type: 'project_completed',
                 projectId: completedProject,
@@ -787,19 +855,27 @@ export const updateUserProgress = async (req: AuthenticatedRequest, res: Respons
         }
 
         // Add achievements to user
-        user.progress.achievements.push(...achievements);
+        if (!userProgress.achievements) userProgress.achievements = [];
+        userProgress.achievements.push(...achievements);
 
         // Update last active date
-        user.progress.lastActiveDate = new Date();
+        userProgress.lastActiveDate = new Date();
 
-        await user.save();
+        await prisma.user.update({
+            where: { id: user.id },
+            data: {
+                xp: user.xp,
+                level: user.level,
+                progress: userProgress
+            }
+        });
 
         return res.json({
             success: true,
             message: 'Progress updated successfully',
             data: {
                 totalXPGained,
-                currentLevel: user.progress.currentLevel,
+                currentLevel: user.level,
                 achievements
             }
         });
@@ -814,9 +890,9 @@ export const updateUserProgress = async (req: AuthenticatedRequest, res: Respons
 
 export const getUserStats = async (req: AuthenticatedRequest, res: Response) => {
     try {
-        const user = await User.findById(req.user._id)
-            .populate('progress.badges', 'name category rarity')
-            .select('-password');
+        const user = await prisma.user.findUnique({
+            where: { id: req.user.id }
+        });
 
         if (!user) {
             return res.status(404).json({
@@ -825,8 +901,11 @@ export const getUserStats = async (req: AuthenticatedRequest, res: Response) => 
             });
         }
 
+        const userProgress = (user.progress as any) || {};
+        const userSettings = (user.settings as any) || {};
+
         // Calculate additional stats
-        const skillsArray = Array.from(user.progress.skillsProgress.entries()).map(([skill, progress]) => ({
+        const skillsArray = Object.entries(userProgress.skillsProgress || {}).map(([skill, progress]) => ({
             skill,
             progress
         }));
@@ -837,27 +916,27 @@ export const getUserStats = async (req: AuthenticatedRequest, res: Response) => 
             data: {
                 profile: {
                     username: user.username,
-                    displayName: user.displayName,
-                    avatar: user.avatar,
-                    level: user.progress.currentLevel,
-                    totalXP: user.progress.totalXP,
-                    streakDays: user.progress.streakDays,
-                    timeSpentLearning: user.progress.timeSpentLearning,
+                    displayName: user.firstName,
+                    avatar: user.avatarUrl,
+                    level: user.level,
+                    totalXP: user.xp,
+                    streakDays: userProgress.streakDays || 0,
+                    timeSpentLearning: userProgress.timeSpentLearning || 0,
                     joinDate: user.createdAt
                 },
                 achievements: {
-                    totalBadges: user.progress.badges.length,
-                    completedModules: user.progress.completedModules.length,
-                    completedChallenges: user.progress.completedChallenges.length,
-                    completedProjects: user.progress.completedProjects.length,
-                    recentAchievements: user.progress.achievements.slice(-5)
+                    totalBadges: userProgress.badges?.length || 0,
+                    completedModules: userProgress.completedModules?.length || 0,
+                    completedChallenges: userProgress.completedChallenges?.length || 0,
+                    completedProjects: userProgress.completedProjects?.length || 0,
+                    recentAchievements: (userProgress.achievements || []).slice(-5)
                 },
                 skills: skillsArray,
                 learning: {
                     ageGroup: user.ageGroup,
-                    preferredLanguage: user.preferredLanguage,
-                    currentStreak: user.progress.streakDays,
-                    learningPath: user.progress.learningPath
+                    preferredLanguage: userSettings.preferredLanguage || 'en',
+                    currentStreak: userProgress.streakDays || 0,
+                    learningPath: userProgress.learningPath || []
                 }
             }
         });
@@ -878,40 +957,60 @@ export const getUserLeaderboard = async (req: Request, res: Response) => {
     try {
         const { ageGroup, timeframe = 'all', limit = 50 } = req.query;
 
-        interface FilterQuery {
-            isActive: boolean;
-            ageGroup?: string;
-            lastLoginAt?: { $gte: Date };
-        }
-        
-        let filter: FilterQuery = { isActive: true };
+        let filter: any = {
+            isActive: true,
+            role: 'student'
+        };
         if (ageGroup && typeof ageGroup === 'string') filter.ageGroup = ageGroup;
 
         // Time-based filtering
         if (timeframe === 'week') {
             const weekAgo = new Date();
             weekAgo.setDate(weekAgo.getDate() - 7);
-            filter.lastLoginAt = { $gte: weekAgo };
-        } else if (timeframe === 'month') {
-            const monthAgo = new Date();
-            monthAgo.setMonth(monthAgo.getMonth() - 1);
-            filter.lastLoginAt = { $gte: monthAgo };
+            filter.auth = {
+                path: ['last_login_at'],
+                array_contains: weekAgo.toISOString() // Note: Json filtering in Prisma varies by DB capabilities
+            };
         }
 
-        const users = await User.find(filter)
-            .select('username displayName ageGroup progress.totalXP progress.currentLevel progress.badges avatar')
-            .sort({ 'progress.totalXP': -1 })
-            .limit(Number(limit));
+        const users = await prisma.user.findMany({
+            where: {
+                isActive: true,
+                role: 'student',
+                ageGroup: ageGroup as string || undefined
+            },
+            select: {
+                id: true,
+                username: true,
+                email: true,
+                role: true,
+                firstName: true,
+                ageGroup: true,
+                xp: true,
+                level: true,
+                avatarUrl: true,
+                progress: true,
+                isActive: true,
+                createdAt: true
+            },
+            orderBy: { xp: 'desc' },
+            take: Number(limit)
+        });
 
         const formattedUsers = users.map((user, index) => ({
             rank: index + 1,
+            id: user.id,
             username: user.username,
-            displayName: user.displayName,
+            email: user.email,
+            role: user.role,
+            displayName: user.firstName,
             ageGroup: user.ageGroup,
-            totalXP: user.progress.totalXP,
-            level: user.progress.currentLevel,
-            badgeCount: user.progress.badges.length,
-            avatar: user.avatar
+            totalXP: user.xp,
+            level: user.level,
+            badgeCount: ((user.progress as any)?.badges?.length || 0),
+            avatar: user.avatarUrl,
+            isActive: user.isActive,
+            joinDate: user.createdAt
         }));
 
         return res.json({
@@ -940,12 +1039,161 @@ export const getUserLeaderboard = async (req: Request, res: Response) => {
 };
 
 // ==========================================
+// PARENTAL CONTROLS
+// ==========================================
+
+export const getParentChildren = async (req: AuthenticatedRequest, res: Response) => {
+    try {
+        if (req.user.role !== 'parent') {
+            return res.status(403).json({
+                success: false,
+                message: 'Parent access required'
+            });
+        }
+
+        const children = await prisma.user.findMany({
+            where: {
+                parentId: req.user.id,
+                role: 'student'
+            },
+            select: {
+                id: true,
+                username: true,
+                firstName: true,
+                ageGroup: true,
+                isActive: true
+            }
+        });
+
+        return res.json({
+            success: true,
+            count: children.length,
+            children: children.map(child => ({
+                id: child.id,
+                username: child.username,
+                displayName: child.firstName,
+                ageGroup: child.ageGroup,
+                isActive: child.isActive
+            }))
+        });
+    } catch (error) {
+        console.error('Error fetching parent profile:', error);
+        return res.status(500).json({
+            success: false,
+            message: 'Error fetching parent profile'
+        });
+    }
+};
+
+export const addChild = async (req: AuthenticatedRequest, res: Response) => {
+    return res.status(501).json({ success: false, message: 'Not implemented' });
+};
+
+export const getChildren = getParentChildren;
+
+export const updateChild = async (req: AuthenticatedRequest, res: Response) => {
+    try {
+        const childId = req.params.childId;
+        const updates = req.body;
+
+        // Verify child belongs to parent
+        const child = await prisma.user.findFirst({
+            where: {
+                id: childId,
+                parentId: req.user.id,
+                role: 'student'
+            }
+        });
+
+        if (!child) {
+            return res.status(404).json({
+                success: false,
+                message: 'Child not found or not authorized'
+            });
+        }
+
+        const updatedChild = await prisma.user.update({
+            where: { id: childId },
+            data: {
+                firstName: updates.displayName || undefined,
+                avatarUrl: updates.avatarUrl || undefined,
+                settings: updates.settings ? (updates.settings as any) : undefined,
+                safety: updates.safety ? (updates.safety as any) : undefined
+            }
+        });
+
+        return res.status(200).json({
+            success: true,
+            message: 'Child updated successfully',
+            data: {
+                id: updatedChild.id,
+                username: updatedChild.username,
+                displayName: updatedChild.firstName,
+                ageGroup: updatedChild.ageGroup,
+                avatar: updatedChild.avatarUrl,
+                settings: updatedChild.settings,
+                safety: updatedChild.safety
+            }
+        });
+    } catch (error) {
+        console.error('Error updating child profile:', error);
+        return res.status(500).json({
+            success: false,
+            message: 'Server error updating child profile'
+        });
+    }
+};
+
+export const deleteChild = async (req: AuthenticatedRequest, res: Response) => {
+    try {
+        if (req.user.role !== 'parent') {
+            return res.status(403).json({
+                success: false,
+                message: 'Only parent accounts can delete children'
+            });
+        }
+
+        const { childId } = req.params;
+
+        const child = await prisma.user.findFirst({
+            where: {
+                id: childId,
+                parentId: req.user.id,
+                role: 'student'
+            }
+        });
+
+        if (!child) {
+            return res.status(404).json({
+                success: false,
+                message: 'Child not found or access denied'
+            });
+        }
+
+        await prisma.user.delete({
+            where: { id: childId }
+        });
+
+        return res.json({
+            success: true,
+            message: 'Child account deletedAt successfully'
+        });
+
+    } catch (error) {
+        console.error('Delete child error:', error);
+        return res.status(500).json({
+            success: false,
+            message: 'Server error deleting child'
+        });
+    }
+};
+
+// ==========================================
 // ADMIN FUNCTIONS
 // ==========================================
 
 export const getAllUsers = async (req: AuthenticatedRequest, res: Response) => {
     try {
-        // Only admins can access this
         if (req.user.role !== 'admin') {
             return res.status(403).json({
                 success: false,
@@ -953,46 +1201,56 @@ export const getAllUsers = async (req: AuthenticatedRequest, res: Response) => {
             });
         }
 
-        const { page = 1, limit = 20, ageGroup, search } = req.query;
+        const { page = 1, limit = 20, ageGroup, search, role } = req.query;
+        const limitNum = Number(limit);
+        const skip = (Number(page) - 1) * limitNum;
 
-        interface UserFilterQuery {
-            ageGroup?: string;
-            $or?: Array<{
-                username?: { $regex: string; $options: string };
-                email?: { $regex: string; $options: string };
-                displayName?: { $regex: string; $options: string };
-            }>;
-        }
+        const query: any = { isActive: true };
+        if (role && typeof role === 'string') query.role = role;
+        if (ageGroup && typeof ageGroup === 'string') query.ageGroup = ageGroup;
 
-        let filter: UserFilterQuery = {};
-        if (ageGroup && typeof ageGroup === 'string') filter.ageGroup = ageGroup;
         if (search && typeof search === 'string') {
-            filter.$or = [
-                { username: { $regex: search, $options: 'i' } },
-                { email: { $regex: search, $options: 'i' } },
-                { displayName: { $regex: search, $options: 'i' } }
+            query.OR = [
+                { username: { contains: search, mode: 'insensitive' } },
+                { email: { contains: search, mode: 'insensitive' } },
+                { firstName: { contains: search, mode: 'insensitive' } }
             ];
         }
 
-        const users = await User.find(filter)
-            .select('-password')
-            .populate('progress.badges', 'name category')
-            .sort({ createdAt: -1 })
-            .limit(Number(limit))
-            .skip((Number(page) - 1) * Number(limit));
+        const users = await prisma.user.findMany({
+            where: query,
+            skip,
+            take: limitNum,
+            orderBy: { createdAt: 'desc' },
+            select: {
+                id: true,
+                username: true,
+                email: true,
+                role: true,
+                firstName: true,
+                xp: true,
+                level: true,
+                isActive: true,
+                createdAt: true,
+                progress: true
+            }
+        });
 
-        const total = await User.countDocuments(filter);
+        const total = await prisma.user.count({ where: query });
 
         return res.json({
             success: true,
             message: 'Users retrieved successfully',
             data: {
-                users,
+                users: users.map(user => ({
+                    ...user,
+                    badgeCount: (user.progress as any)?.badges?.length || 0
+                })),
                 pagination: {
                     currentPage: Number(page),
-                    limit: Number(limit),
+                    limit: limitNum,
                     total: total,
-                    totalPages: Math.ceil(total / Number(limit))
+                    totalPages: Math.ceil(total / limitNum)
                 }
             }
         });
@@ -1007,7 +1265,6 @@ export const getAllUsers = async (req: AuthenticatedRequest, res: Response) => {
 
 export const updateUserRole = async (req: AuthenticatedRequest, res: Response) => {
     try {
-        // Only admins can update roles
         if (req.user.role !== 'admin') {
             return res.status(403).json({
                 success: false,
@@ -1016,32 +1273,25 @@ export const updateUserRole = async (req: AuthenticatedRequest, res: Response) =
         }
 
         const { userId } = req.params;
-        const { role } = req.body;
+        const { role: newRole } = req.body;
 
-        if (!['student', 'instructor', 'admin'].includes(role)) {
-            return res.status(400).json({
-                success: false,
-                message: 'Invalid role specified'
-            });
-        }
-
-        const user = await User.findByIdAndUpdate(
-            userId,
-            { role },
-            { new: true }
-        ).select('-password');
-
-        if (!user) {
-            return res.status(404).json({
-                success: false,
-                message: 'User not found'
-            });
-        }
+        const updatedUser = await prisma.user.update({
+            where: { id: userId },
+            data: { role: newRole },
+            select: {
+                id: true,
+                username: true,
+                email: true,
+                firstName: true,
+                role: true,
+                isActive: true
+            }
+        });
 
         return res.json({
             success: true,
             message: 'User role updated successfully',
-            data: user
+            data: updatedUser
         });
     } catch (error) {
         console.error('Update user role error:', error);
@@ -1054,7 +1304,6 @@ export const updateUserRole = async (req: AuthenticatedRequest, res: Response) =
 
 export const deactivateUser = async (req: AuthenticatedRequest, res: Response) => {
     try {
-        // Only admins can deactivate users
         if (req.user.role !== 'admin') {
             return res.status(403).json({
                 success: false,
@@ -1065,26 +1314,19 @@ export const deactivateUser = async (req: AuthenticatedRequest, res: Response) =
         const { userId } = req.params;
         const { reason } = req.body;
 
-        const user = await User.findByIdAndUpdate(
-            userId,
-            { 
+        const user = await prisma.user.update({
+            where: { id: userId },
+            data: {
                 isActive: false,
                 deactivatedAt: new Date(),
                 deactivationReason: reason
-            },
-            { new: true }
-        ).select('-password');
-
-        if (!user) {
-            return res.status(404).json({
-                success: false,
-                message: 'User not found'
-            });
-        }
+            }
+        });
 
         return res.json({
             success: true,
-            message: 'User deactivated successfully'
+            message: 'User deactivated successfully',
+            data: user
         });
     } catch (error) {
         console.error('Deactivate user error:', error);
@@ -1103,7 +1345,6 @@ export const grantParentalConsent = async (req: Request, res: Response) => {
     try {
         const { userId, consentToken, parentSignature } = req.body;
 
-        // Validate consent token (implement your consent verification logic)
         if (!consentToken || !parentSignature) {
             return res.status(400).json({
                 success: false,
@@ -1111,7 +1352,9 @@ export const grantParentalConsent = async (req: Request, res: Response) => {
             });
         }
 
-        const user = await User.findById(userId);
+        const user = await prisma.user.findUnique({
+            where: { id: userId }
+        });
         if (!user) {
             return res.status(404).json({
                 success: false,
@@ -1119,25 +1362,21 @@ export const grantParentalConsent = async (req: Request, res: Response) => {
             });
         }
 
-        if (!user.coppa.requiresParentalConsent) {
-            return res.status(400).json({
-                success: false,
-                message: 'User does not require parental consent'
-            });
-        }
+        const userCoppa = (user.coppa as any) || {};
+        userCoppa.parentalConsent = true;
+        userCoppa.consentDate = new Date();
+        userCoppa.consentMethod = 'digital_signature';
+        userCoppa.parentSignature = parentSignature;
 
-        // Grant consent
-        user.coppa.parentalConsent = true;
-        user.coppa.consentDate = new Date();
-        user.coppa.consentMethod = 'digital_signature';
-        user.coppa.parentSignature = parentSignature;
-
-        await user.save();
+        const updatedUser = await prisma.user.update({
+            where: { id: userId },
+            data: { coppa: userCoppa }
+        });
 
         return res.json({
             success: true,
             message: 'Parental consent granted successfully',
-            data: { user }
+            data: updatedUser
         });
     } catch (error) {
         console.error('Grant parental consent error:', error);
@@ -1149,631 +1388,41 @@ export const grantParentalConsent = async (req: Request, res: Response) => {
 };
 
 // ==========================================
-// PASSWORD MANAGEMENT
+// CUSTOMIZATION & MASCOTS
 // ==========================================
 
-export const changePassword = async (req: AuthenticatedRequest, res: Response) => {
-    try {
-        const { currentPassword, newPassword } = req.body;
-
-        if (!currentPassword || !newPassword) {
-            return res.status(400).json({
-                success: false,
-                message: 'Current password and new password are required'
-            });
-        }
-
-        const user = await User.findById(req.user._id).select('+password');
-        if (!user) {
-            return res.status(404).json({
-                success: false,
-                message: 'User not found'
-            });
-        }
-
-        // Verify current password
-        const isMatch = await bcrypt.compare(currentPassword, user.password);
-        if (!isMatch) {
-            return res.status(400).json({
-                success: false,
-                message: 'Current password is incorrect'
-            });
-        }
-
-        // Validate new password
-        if (newPassword.length < 6) {
-            return res.status(400).json({
-                success: false,
-                message: 'New password must be at least 6 characters long'
-            });
-        }
-
-        // Hash new password
-        const salt = await bcrypt.genSalt(12);
-        const hashedPassword = await bcrypt.hash(newPassword, salt);
-
-        user.password = hashedPassword;
-        user.auth.passwordChangedAt = new Date();
-        await user.save();
-
-        return res.json({
-            success: true,
-            message: 'Password changed successfully'
-        });
-    } catch (error) {
-        console.error('Change password error:', error);
-        return res.status(500).json({
-            success: false,
-            message: 'Server error changing password'
-        });
-    }
-};
-
-// ==========================================
-// USER DELETION (COPPA Compliance)
-// ==========================================
-
-export const deleteUserAccount = async (req: AuthenticatedRequest, res: Response) => {
-    try {
-        const { password, reason } = req.body;
-        const userId = req.user._id;
-
-        const user = await User.findById(userId).select('+password');
-        if (!user) {
-            return res.status(404).json({
-                success: false,
-                message: 'User not found'
-            });
-        }
-
-        // Verify password
-        const isMatch = await bcrypt.compare(password, user.password);
-        if (!isMatch) {
-            return res.status(400).json({
-                success: false,
-                message: 'Password is incorrect'
-            });
-        }
-
-        // For COPPA compliance, completely remove data for users under 13
-        if (user.coppa.requiresParentalConsent) {
-            await User.findByIdAndDelete(userId);
-        } else {
-            // For older users, soft delete with data retention
-            user.isActive = false;
-            user.deletedAt = new Date();
-            user.deactivationReason = reason;
-            // Clear sensitive data but keep learning analytics (anonymized)
-            user.email = `deleted_${userId}@deleted.local`;
-            user.username = `deleted_user_${userId}`;
-            user.displayName = 'Deleted User';
-            await user.save();
-        }
-
-        return res.json({
-            success: true,
-            message: 'Account deleted successfully'
-        });
-
-    } catch (error) {
-        console.error('Delete account error:', error);
-        return res.status(500).json({
-            success: false,
-            message: 'Server error deleting account'
-        });
-    }
-};
-
-// ==========================================
-// CHILD MANAGEMENT (PARENT FUNCTIONALITY)
-// ==========================================
-
-export const addChild = async (req: AuthenticatedRequest, res: Response) => {
-    try {
-        // Only parents can add children
-        if (req.user.role !== 'parent') {
-            return res.status(403).json({
-                success: false,
-                message: 'Only parent accounts can add children'
-            });
-        }
-
-        const { 
-            username, 
-            email, 
-            password, 
-            dateOfBirth,
-            displayName,
-            preferredLanguage = 'en'
-        } = req.body;
-
-        // Validate required fields
-        if (!username || !email || !password || !dateOfBirth) {
-            return res.status(400).json({
-                success: false,
-                message: 'Username, email, password, and date of birth are required'
-            });
-        }
-
-        // Calculate age and determine if COPPA applies
-        const birthDate = new Date(dateOfBirth);
-        const today = new Date();
-        let age = today.getFullYear() - birthDate.getFullYear();
-        const monthDifference = today.getMonth() - birthDate.getMonth();
-        if (monthDifference < 0 || (monthDifference === 0 && today.getDate() < birthDate.getDate())) {
-            age--;
-        }
-
-        // Validate age range for children
-        if (age < 4 || age > 15) {
-            return res.status(400).json({
-                success: false,
-                message: 'This platform is designed for children ages 4-15'
-            });
-        }
-
-        // Determine COPPA compliance and age group
-        const requiresParentalConsent = age < 13;
-        const ageGroup = getAgeGroup(age); // Use the updated COPPA function
-
-        // Check if user exists
-        const existingUser = await User.findOne({ 
-            $or: [{ email }, { username }] 
-        });
-        if (existingUser) {
-            return res.status(400).json({
-                success: false,
-                message: 'User already exists with this email or username'
-            });
-        }
-
-        // Validate password strength
-        if (password.length < 6) {
-            return res.status(400).json({
-                success: false,
-                message: 'Password must be at least 6 characters long'
-            });
-        }
-
-        // Hash password
-        const salt = await bcrypt.genSalt(12);
-        const hashedPassword = await bcrypt.hash(password, salt);
-
-        // Create child user data
-        const userData = {
-            username,
-            email,
-            password: hashedPassword,
-            displayName: displayName || username,
-            dateOfBirth: birthDate,
-            age,
-            ageGroup,
-            role: 'student',
-            preferredLanguage,
-            timezone: 'UTC',
-            
-            // COPPA compliance - link to parent
-            coppa: {
-                requiresParentalConsent,
-                parentEmail: req.user.email, // Link to parent who is adding the child
-                parentalConsent: true, // Parent is adding the child, so consent is given
-                consentDate: new Date(),
-                consentMethod: 'digital_signature' // Parent digitally consented by adding the child
-            },
-
-            // Student configuration
-            progress: {
-                totalXP: 0,
-                currentLevel: 1,
-                badges: [],
-                completedModules: [],
-                completedChallenges: [],
-                completedProjects: [],
-                achievements: [],
-                streakDays: 0,
-                lastActiveDate: new Date(),
-                timeSpentLearning: 0,
-                skillsProgress: {},
-                moduleProgress: {}
-            },
-            
-            settings: {
-                notifications: {
-                    email: !requiresParentalConsent,
-                    push: false,
-                    achievements: true,
-                    reminders: !requiresParentalConsent,
-                    weeklyReports: !requiresParentalConsent
-                },
-                privacy: {
-                    showProgress: !requiresParentalConsent,
-                    allowFriendRequests: requiresParentalConsent ? false : true,
-                    showOnLeaderboard: !requiresParentalConsent,
-                    allowProjectSharing: requiresParentalConsent ? false : true
-                },
-                accessibility: {
-                    fontSize: 'medium',
-                    highContrast: false,
-                    screenReader: false,
-                    keyboardNavigation: false,
-                    audioDescriptions: false
-                },
-                learning: {
-                    difficultyPreference: 'adaptive',
-                    pacePreference: 'self_paced',
-                    visualPreferences: ['colorful', 'animated'],
-                    reminderTime: '16:00'
-                }
-            },
-            
-            safety: {
-                contentFilter: requiresParentalConsent ? 'strict' : 'moderate',
-                blockedUsers: [],
-                reportedContent: [],
-                parentalControls: {
-                    timeLimit: requiresParentalConsent ? 60 : 120, // minutes per day
-                    allowedFeatures: requiresParentalConsent ? ['learn', 'practice'] : ['learn', 'practice', 'create', 'share'],
-                    requireApprovalForSharing: requiresParentalConsent
-                }
-            }
-        };
-
-        const child = new User(userData);
-        await child.save();
-
-        // Response data (filtered for safety)
-        const responseChild = {
-            id: child._id,
-            username: child.username,
-            displayName: child.displayName,
-            ageGroup: child.ageGroup,
-            role: child.role,
-            preferredLanguage: child.preferredLanguage,
-            age: child.age,
-            settings: child.settings,
-            safety: child.safety,
-            requiresParentalConsent: child.coppa.requiresParentalConsent,
-            hasParentalConsent: child.coppa.parentalConsent,
-            progress: {
-                totalXP: child.progress.totalXP,
-                currentLevel: child.progress.currentLevel,
-                badges: child.progress.badges.length,
-                completedModules: child.progress.completedModules.length
-            }
-        };
-
-        return res.status(201).json({
-            success: true,
-            message: 'Child account created successfully!',
-            data: responseChild
-        });
-
-    } catch (error) {
-        console.error('Add child error details:', {
-            message: error instanceof Error ? error.message : String(error),
-            stack: error instanceof Error ? error.stack : undefined,
-            name: error instanceof Error ? error.name : 'Unknown',
-            parentId: req.user._id
-        });
-        
-        // More specific error messages based on error type
-        if (error instanceof Error && error.name === 'ValidationError') {
-            const validationError = error as unknown as { errors: Record<string, unknown> };
-            return res.status(400).json({
-                success: false,
-                message: 'Validation error: ' + error.message,
-                errors: validationError.errors
-            });
-        }
-        
-        const mongoError = error as { code?: number };
-        if (error instanceof Error && mongoError.code === 11000) {
-            return res.status(400).json({
-                success: false,
-                message: 'Child account already exists with this email or username'
-            });
-        }
-        
-        return res.status(500).json({
-            success: false,
-            message: 'Server error creating child account: ' + (error instanceof Error ? error.message : String(error))
-        });
-    }
-};
-
-export const getChildren = async (req: AuthenticatedRequest, res: Response) => {
-    try {
-        // Only parents can get their children
-        if (req.user.role !== 'parent') {
-            return res.status(403).json({
-                success: false,
-                message: 'Only parent accounts can access children'
-            });
-        }
-
-        // Find all children linked to this parent
-        const children = await User.find({ 
-            'coppa.parentEmail': req.user.email,
-            role: 'student'
-        }).select('-password');
-
-        const formattedChildren = children.map(child => ({
-            id: child._id,
-            username: child.username,
-            displayName: child.displayName,
-            dateOfBirth: child.dateOfBirth,
-            ageGroup: child.ageGroup,
-            age: child.age,
-            avatar: child.avatar,
-            preferredLanguage: child.preferredLanguage,
-            requiresParentalConsent: child.coppa.requiresParentalConsent,
-            hasParentalConsent: child.coppa.parentalConsent,
-            settings: child.settings,
-            safety: child.safety,
-            progress: {
-                totalXP: child.progress.totalXP,
-                currentLevel: child.progress.currentLevel,
-                badges: child.progress.badges.length,
-                completedModules: child.progress.completedModules.length,
-                completedChallenges: child.progress.completedChallenges.length,
-                streakDays: child.progress.streakDays,
-                timeSpentLearning: child.progress.timeSpentLearning,
-                lastActiveDate: child.progress.lastActiveDate
-            }
-        }));
-
-        return res.json({
-            success: true,
-            message: 'Children retrieved successfully',
-            data: formattedChildren
-        });
-
-    } catch (error) {
-        console.error('Get children error:', error);
-        return res.status(500).json({
-            success: false,
-            message: 'Server error fetching children'
-        });
-    }
-};
-
-export const updateChild = async (req: AuthenticatedRequest, res: Response) => {
-    try {
-        console.log('UpdateChild: Starting request');
-        console.log('UpdateChild: User ID:', req.user._id);
-        console.log('UpdateChild: User email:', req.user.email);
-        console.log('UpdateChild: Child ID:', req.params.childId);
-        console.log('UpdateChild: Request body:', req.body);
-
-        // Only parents can update their children
-        if (req.user.role !== 'parent') {
-            console.log('UpdateChild: Unauthorized - user is not parent');
-            return res.status(403).json({
-                success: false,
-                message: 'Only parent accounts can update children'
-            });
-        }
-
-        const { childId } = req.params;
-        const updates = req.body;
-
-        // Find the child and verify it belongs to this parent
-        const child = await User.findOne({
-            _id: childId,
-            'coppa.parentEmail': req.user.email,
-            role: 'student'
-        });
-
-        console.log('UpdateChild: Found child:', child ? child._id : 'NOT FOUND');
-
-        if (!child) {
-            console.log('UpdateChild: Child not found or access denied');
-            return res.status(404).json({
-                success: false,
-                message: 'Child not found or access denied'
-            });
-        }
-
-        // Update allowed fields only
-        const allowedUpdates = ['displayName', 'preferredLanguage', 'avatar', 'settings', 'safety'];
-        const filteredUpdates: Record<string, unknown> = {};
-        
-        allowedUpdates.forEach(field => {
-            if (updates[field] !== undefined) {
-                console.log(`UpdateChild: Processing field ${field}:`, updates[field]);
-                if (field === 'settings' || field === 'safety') {
-                    filteredUpdates[field] = { ...child[field as keyof typeof child], ...updates[field] };
-                } else {
-                    filteredUpdates[field] = updates[field];
-                }
-            }
-        });
-
-        console.log('UpdateChild: Filtered updates:', filteredUpdates);
-
-        const updatedChild = await User.findByIdAndUpdate(
-            childId,
-            filteredUpdates,
-            { new: true }
-        ).select('-password');
-
-        if (!updatedChild) {
-            console.log('UpdateChild: Failed to update child');
-            return res.status(404).json({
-                success: false,
-                message: 'Failed to update child'
-            });
-        }
-
-        console.log('UpdateChild: Successfully updated child');
-
-        return res.json({
-            success: true,
-            message: 'Child updated successfully',
-            data: {
-                id: updatedChild._id,
-                username: updatedChild.username,
-                displayName: updatedChild.displayName,
-                ageGroup: updatedChild.ageGroup,
-                avatar: updatedChild.avatar,
-                settings: updatedChild.settings,
-                safety: updatedChild.safety
-            }
-        });
-
-    } catch (error) {
-        console.error('UpdateChild: Error occurred:', error);
-        return res.status(500).json({
-            success: false,
-            message: 'Server error updating child',
-            error: error instanceof Error ? error.message : 'Unknown error'
-        });
-    }
-};
-
-export const deleteChild = async (req: AuthenticatedRequest, res: Response) => {
-    try {
-        // Only parents can delete their children
-        if (req.user.role !== 'parent') {
-            return res.status(403).json({
-                success: false,
-                message: 'Only parent accounts can delete children'
-            });
-        }
-
-        const { childId } = req.params;
-
-        // Find the child and verify it belongs to this parent
-        const child = await User.findOne({
-            _id: childId,
-            'coppa.parentEmail': req.user.email,
-            role: 'student'
-        });
-
-        if (!child) {
-            return res.status(404).json({
-                success: false,
-                message: 'Child not found or access denied'
-            });
-        }
-
-        // For COPPA compliance, completely remove child data
-        await User.findByIdAndDelete(childId);
-
-        return res.json({
-            success: true,
-            message: 'Child account deleted successfully'
-        });
-
-    } catch (error) {
-        console.error('Delete child error:', error);
-        return res.status(500).json({
-            success: false,
-            message: 'Server error deleting child'
-        });
-    }
-};
-
-// ==========================================
-// CHILD PROFILE CUSTOMIZATION
-// ==========================================
-
-/**
- * Update child's mascot selection (now always Bugsby)
- */
 export const updateChildMascot = async (req: AuthenticatedRequest, res: Response) => {
     try {
-        const userId = req.user._id;
+        const userId = req.user.id;
+        const user = await prisma.user.findUnique({ where: { id: userId } });
 
-        console.log('updateChildMascot called - setting Bugsby as mascot for user:', userId);
-
-        const user = await User.findById(userId);
-        if (!user) {
-            console.log('User not found:', userId);
-            return res.status(404).json({
-                success: false,
-                message: 'User not found'
-            });
-        }
-
-        console.log('Found user:', { id: user._id, role: user.role, hasSettings: !!user.settings });
-
-        // Only children can update their mascot
-        if (user.role !== 'student') {
-            console.log('Access denied - user role is not student:', user.role);
+        if (!user || user.role !== 'student') {
             return res.status(403).json({
                 success: false,
                 message: 'Only child accounts can select mascots'
             });
         }
 
-        // Initialize settings.learning if it doesn't exist
-        if (!user.settings) {
-            console.log('Initializing user settings for user:', userId);
-            user.settings = {
-                notifications: {
-                    email: true,
-                    push: true,
-                    achievements: true,
-                    reminders: true,
-                    weeklyReports: true
-                },
-                privacy: {
-                    showProgress: true,
-                    allowFriendRequests: true,
-                    showOnLeaderboard: true,
-                    allowProjectSharing: true
-                },
-                accessibility: {
-                    fontSize: 'medium',
-                    highContrast: false,
-                    screenReader: false,
-                    keyboardNavigation: false,
-                    audioDescriptions: false
-                },
-                learning: {
-                    difficultyPreference: 'adaptive',
-                    pacePreference: 'self_paced',
-                    visualPreferences: [],
-                    reminderTime: '16:00'
-                }
-            };
-        }
+        let settings = (user.settings as any) || {};
+        if (!settings.learning) settings.learning = {};
 
-        if (!user.settings.learning) {
-            console.log('Initializing learning settings for user:', userId);
-            user.settings.learning = {
-                difficultyPreference: 'adaptive',
-                pacePreference: 'self_paced',
-                visualPreferences: [],
-                reminderTime: '16:00'
-            };
-        }
+        settings.learning.visualPreferences = ['bugsby'];
+        settings.learning.mascot = {
+            type: 'bugsby',
+            name: 'Bugsby',
+            unlockedAt: new Date()
+        };
 
-        console.log('Before mascot update - current visual preferences:', user.settings.learning.visualPreferences);
-
-        // Set Bugsby as the only mascot companion
-        user.settings.learning.visualPreferences = ['bugsby'];
-        
-        console.log('After mascot update - new visual preferences:', user.settings.learning.visualPreferences);
-        
-        // Mark the settings as modified for Mongoose
-        user.markModified('settings');
-        
-        console.log('Saving user with Bugsby as mascot...');
-        await user.save();
-        
-        console.log('User saved successfully with mascot: bugsby');
+        await prisma.user.update({
+            where: { id: userId },
+            data: { settings }
+        });
 
         return res.json({
             success: true,
             message: 'Bugsby is now your coding companion!',
-            data: {
-                selectedMascot: 'bugsby',
-                mascotName: 'Bugsby'
-            }
+            data: { selectedMascot: 'bugsby' }
         });
-
     } catch (error) {
         console.error('Update mascot error:', error);
         return res.status(500).json({
@@ -1782,113 +1431,3 @@ export const updateChildMascot = async (req: AuthenticatedRequest, res: Response
         });
     }
 };
-
-/**
- * Get available mascots for selection
- * @deprecated - Settings interface removed, keeping for potential future use
- */
-/* 
-export const getAvailableMascots = async (req: AuthenticatedRequest, res: Response) => {
-    try {
-        const mascots = [
-            {
-                id: 'cody-cat',
-                name: 'Cody Cat',
-                description: 'A curious coding cat who loves to explore',
-                personality: 'Playful and inquisitive',
-                avatar: '/images/mascots/cody-cat.png'
-            },
-            {
-                id: 'ruby-robot',
-                name: 'Ruby Robot',
-                description: 'A logical, step-by-step coding companion',
-                personality: 'Analytical and methodical',
-                avatar: '/images/mascots/ruby-robot.png'
-            },
-            {
-                id: 'luna-wizard',
-                name: 'Luna Wizard',
-                description: 'A magical coding wizard with endless creativity',
-                personality: 'Creative and inspiring',
-                avatar: '/images/mascots/luna-wizard.png'
-            },
-            {
-                id: 'pixel-panda',
-                name: 'Pixel Panda',
-                description: 'A friendly coding panda who makes learning fun',
-                personality: 'Gentle and encouraging',
-                avatar: '/images/mascots/pixel-panda.png'
-            },
-            {
-                id: 'byte-bear',
-                name: 'Byte Bear',
-                description: 'A space-exploring coding companion',
-                personality: 'Adventurous and futuristic',
-                avatar: '/images/mascots/byte-bear.png'
-            }
-        ];
-
-        return res.json({
-            success: true,
-            data: mascots
-        });
-
-    } catch (error) {
-        console.error('Get mascots error:', error);
-        return res.status(500).json({
-            success: false,
-            message: 'Server error fetching mascots'
-        });
-    }
-};
-*/
-
-/**
- * Get child's current mascot selection
- * @deprecated - Settings interface removed, keeping for potential future use
- */
-/* 
-export const getChildMascot = async (req: AuthenticatedRequest, res: Response) => {
-    try {
-        const userId = req.user._id;
-
-        const user = await User.findById(userId).select('settings role');
-        if (!user) {
-            return res.status(404).json({
-                success: false,
-                message: 'User not found'
-            });
-        }
-
-        if (user.role !== 'student') {
-            return res.status(403).json({
-                success: false,
-                message: 'Only child accounts have mascot selections'
-            });
-        }
-
-        const selectedMascot = user.settings?.learning?.visualPreferences?.[0] || null;
-
-        return res.json({
-            success: true,
-            data: {
-                selectedMascot,
-                mascotName: selectedMascot ? getMascotName(selectedMascot) : null
-            }
-        });
-
-    } catch (error) {
-        console.error('Get child mascot error:', error);
-        return res.status(500).json({
-            success: false,
-            message: 'Server error fetching mascot'
-        });
-    }
-};
-*/
-
-// Helper function to get mascot display name (now only Bugsby)
-function _getMascotName(_mascotId: string): string {
-    // Only one mascot companion - Bugsby
-    return 'Bugsby';
-}

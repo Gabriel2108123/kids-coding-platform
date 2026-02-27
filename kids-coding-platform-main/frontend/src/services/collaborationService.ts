@@ -38,7 +38,7 @@ class CollaborationSocket {
   private reconnectAttempts = 0;
   private maxReconnectAttempts = 5;
 
-  connect(serverUrl: string = process.env.REACT_APP_BACKEND_URL || 'http://localhost:3001'): Promise<Socket> {
+  connect(serverUrl: string = process.env.REACT_APP_BACKEND_URL || 'http://localhost:5000'): Promise<Socket> {
     return new Promise((resolve, reject) => {
       if (this.socket?.connected) {
         resolve(this.socket);
@@ -63,7 +63,7 @@ class CollaborationSocket {
         // eslint-disable-next-line no-console
         console.log('🔌 Disconnected from collaboration server:', reason);
         this.isConnected = false;
-        
+
         if (reason === 'io server disconnect') {
           // Server initiated disconnect, try to reconnect
           this.attemptReconnect();
@@ -90,7 +90,7 @@ class CollaborationSocket {
       this.reconnectAttempts++;
       // eslint-disable-next-line no-console
       console.log(`🔄 Attempting to reconnect (${this.reconnectAttempts}/${this.maxReconnectAttempts})`);
-      
+
       setTimeout(() => {
         this.socket?.connect();
       }, 1000 * this.reconnectAttempts);
@@ -238,7 +238,7 @@ export const useCollaboration = (userId: string, username: string) => {
     });
 
     socket.on('cursor_moved', (data: { userId: string; x: number; y: number }) => {
-      setParticipants(prev => prev.map(p => 
+      setParticipants(prev => prev.map(p =>
         p.id === data.userId ? { ...p, cursor: { x: data.x, y: data.y } } : p
       ));
     });
@@ -353,16 +353,16 @@ export const useCollaboration = (userId: string, username: string) => {
 // Helper function to generate consistent colors for users
 function generateUserColor(userId: string): string {
   const colors = [
-    '#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', 
+    '#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4',
     '#FECA57', '#FF9FF3', '#54A0FF', '#5F27CD',
     '#00D2D3', '#FF9F43', '#EE5A24', '#0984E3'
   ];
-  
+
   let hash = 0;
   for (let i = 0; i < userId.length; i++) {
     hash = userId.charCodeAt(i) + ((hash << 5) - hash);
   }
-  
+
   return colors[Math.abs(hash) % colors.length];
 }
 

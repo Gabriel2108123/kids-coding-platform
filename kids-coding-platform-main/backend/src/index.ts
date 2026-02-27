@@ -1,5 +1,4 @@
 import express from 'express';
-import mongoose from 'mongoose';
 import cors from 'cors';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
@@ -10,22 +9,18 @@ import path from 'path';
 import dotenv from 'dotenv';
 
 // Import configurations
-import { connectToDatabase } from './config/database';
+import prisma from './prisma';
 
 // Import middleware
 import { authMiddleware, optionalAuth } from './middleware/authMiddleware';
 
 // Import routes
 import userRoutes from './routes/userRoutes';
-// import badgeRoutes from './routes/badgeRoutes';
-// import challengeRoutes from './routes/challengeRoutes';
-// import moduleRoutes from './routes/moduleRoutes';
 import projectRoutes from './routes/projectRoutes';
 import codeExecutionRoutes from './routes/codeExecutionRoutes';
 import mascotRoutes from './routes/mascotRoutes';
 
-// Import models for initialization
-import { initializeModels } from './models';
+// Models logic is now handled by Prisma client
 
 // Load environment variables
 dotenv.config();
@@ -109,7 +104,8 @@ const coppaLimiter = rateLimit({
     },
     skip: (req) => {
         // Skip if user doesn't require parental consent or is not authenticated
-        return !req.user?.coppa?.requiresParentalConsent;
+        const userCoppa = (req.user?.coppa as any) || {};
+        return !userCoppa.requiresParentalConsent;
     }
 });
 
@@ -131,14 +127,14 @@ const corsOptions = {
             'https://kids-coding-platform.com', // Production domain
             'https://www.kids-coding-platform.com' // Production www domain
         ];
-        
+
         // Allow requests with no origin (mobile apps, Postman, etc.)
         if (!origin) return callback(null, true);
-        
+
         // In development, allow any localhost or local IP
         if (process.env.NODE_ENV === 'development') {
-            if (origin.includes('localhost') || 
-                origin.includes('127.0.0.1') || 
+            if (origin.includes('localhost') ||
+                origin.includes('127.0.0.1') ||
                 origin.includes('100.74.199.17') ||
                 origin.includes('192.168.116.216') ||
                 origin.includes('192.168.4.125') ||
@@ -148,7 +144,7 @@ const corsOptions = {
                 return callback(null, true);
             }
         }
-        
+
         if (allowedOrigins.indexOf(origin) !== -1) {
             callback(null, true);
         } else {
@@ -182,15 +178,15 @@ if (NODE_ENV === 'production') {
 }
 
 // Body parsing with size limits for safety
-app.use(express.json({ 
+app.use(express.json({
     limit: '10mb',
     verify: (req: express.Request & { rawBody?: Buffer }, res, buf) => {
         req.rawBody = buf;
     }
 }));
-app.use(express.urlencoded({ 
-    extended: true, 
-    limit: '10mb' 
+app.use(express.urlencoded({
+    extended: true,
+    limit: '10mb'
 }));
 
 // Serve static files (for uploaded content)
@@ -212,26 +208,18 @@ app.get('/health', (req, res) => {
 
 app.get('/api/health', async (req, res) => {
     try {
-        // Check database connection
-        const dbState = mongoose.connection.readyState;
-        const dbStatusMap: Record<number, string> = {
-            0: 'disconnected',
-            1: 'connected',
-            2: 'connecting',
-            3: 'disconnecting'
-        };
-        const dbStatus = dbStatusMap[dbState] || 'unknown';
-        
-        const isHealthy = dbState === 1;
-        
+        // Check database connection by querying the current time
+        const dbCheck = await prisma.$queryRaw`SELECT 1 as result`;
+        const isHealthy = !!dbCheck;
+
         res.status(isHealthy ? 200 : 503).json({
             success: isHealthy,
-            message: isHealthy ? 'All systems operational' : 'System issues detected',
+            message: isHealthy ? 'All systems operational' : 'Database connection issues',
             timestamp: new Date().toISOString(),
             environment: NODE_ENV,
             services: {
                 database: {
-                    status: dbStatus,
+                    status: isHealthy ? 'connected' : 'disconnected',
                     healthy: isHealthy
                 },
                 server: {
@@ -261,10 +249,15 @@ app.use('/api/auth', authLimiter, userRoutes);
 // User management routes
 app.use('/api/users', optionalAuth, userRoutes);
 
-// Educational content routes (temporarily commented out for debugging)
-// app.use('/api/badges', optionalAuth, badgeRoutes);
-// app.use('/api/challenges', optionalAuth, challengeRoutes);
-// app.use('/api/modules', optionalAuth, moduleRoutes);
+// Import educational content routes
+import badgeRoutes from './routes/badgeRoutes';
+import challengeRoutes from './routes/challengeRoutes';
+import moduleRoutes from './routes/moduleRoutes';
+
+// Educational content routes
+app.use('/api/badges', optionalAuth, badgeRoutes);
+app.use('/api/challenges', optionalAuth, challengeRoutes);
+app.use('/api/modules', optionalAuth, moduleRoutes);
 app.use('/api/projects', optionalAuth, projectRoutes);
 
 // Code execution routes (with additional safety measures)
@@ -360,7 +353,7 @@ interface CustomError extends Error {
 
 app.use((err: CustomError, req: express.Request, res: express.Response, _next: express.NextFunction) => {
     console.error('Error:', err);
-    
+
     // CORS errors
     if (err.message && err.message.includes('CORS')) {
         return res.status(403).json({
@@ -369,7 +362,7 @@ app.use((err: CustomError, req: express.Request, res: express.Response, _next: e
             code: 'CORS_ERROR'
         });
     }
-    
+
     // Validation errors
     if (err.name === 'ValidationError') {
         return res.status(400).json({
@@ -379,7 +372,7 @@ app.use((err: CustomError, req: express.Request, res: express.Response, _next: e
             details: err.errors ? Object.values(err.errors).map((e: { message: string }) => e.message) : []
         });
     }
-    
+
     // Cast errors (invalid ObjectId, etc.)
     if (err.name === 'CastError') {
         return res.status(400).json({
@@ -388,7 +381,7 @@ app.use((err: CustomError, req: express.Request, res: express.Response, _next: e
             code: 'CAST_ERROR'
         });
     }
-    
+
     // Duplicate key errors
     if (err.code === 11000) {
         return res.status(409).json({
@@ -398,7 +391,7 @@ app.use((err: CustomError, req: express.Request, res: express.Response, _next: e
             field: err.keyPattern ? Object.keys(err.keyPattern)[0] : undefined
         });
     }
-    
+
     // JWT errors
     if (err.name === 'JsonWebTokenError') {
         return res.status(401).json({
@@ -407,7 +400,7 @@ app.use((err: CustomError, req: express.Request, res: express.Response, _next: e
             code: 'INVALID_TOKEN'
         });
     }
-    
+
     if (err.name === 'TokenExpiredError') {
         return res.status(401).json({
             success: false,
@@ -415,7 +408,7 @@ app.use((err: CustomError, req: express.Request, res: express.Response, _next: e
             code: 'TOKEN_EXPIRED'
         });
     }
-    
+
     // Rate limit errors
     if (err.status === 429) {
         return res.status(429).json({
@@ -424,11 +417,11 @@ app.use((err: CustomError, req: express.Request, res: express.Response, _next: e
             code: 'RATE_LIMIT_EXCEEDED'
         });
     }
-    
+
     // Default error response
     const statusCode = err.statusCode || err.status || 500;
     const message = NODE_ENV === 'production' ? 'Internal server error' : err.message;
-    
+
     return res.status(statusCode).json({
         success: false,
         message,
@@ -444,22 +437,19 @@ app.use((err: CustomError, req: express.Request, res: express.Response, _next: e
 const startServer = async () => {
     try {
         console.log('🚀 Starting Kids Coding Platform Server...');
-        
-        // Try to connect to database (non-blocking for development)
-        console.log('📊 Connecting to database...');
+
+        // Try to connect to database
+        console.log('📊 Connecting to database (Prisma)...');
         try {
-            await connectToDatabase();
-            console.log('✅ Database connected successfully');
-            
-            // Initialize models
-            console.log('🔧 Initializing models...');
-            await initializeModels();
-            console.log('✅ Models initialized successfully');
+            await prisma.$connect();
+            console.log('✅ Database connected successfully via Prisma');
         } catch (dbError) {
-            console.log('⚠️ Database connection failed, but continuing in development mode...');
-            console.log('📊 Some features may not work without database connection');
+            console.log('⚠️ Database connection failed:', dbError);
+            if (NODE_ENV === 'production') {
+                throw dbError;
+            }
         }
-        
+
         // Start the server
         const HOST = process.env.HOST || '0.0.0.0';
         const server = app.listen(Number(PORT), HOST, () => {
@@ -474,17 +464,17 @@ const startServer = async () => {
             console.log(`   - http://192.168.116.216:${PORT}`);
             console.log('🎯 Kids Coding Platform is ready for learning!');
         });
-        
+
         // Graceful shutdown handling
         const gracefulShutdown = (signal: string) => {
             console.log(`\n🛑 Received ${signal}. Starting graceful shutdown...`);
-            
+
             server.close(async () => {
                 console.log('📡 HTTP server closed');
-                
+
                 try {
-                    await mongoose.connection.close();
-                    console.log('📊 Database connection closed');
+                    await prisma.$disconnect();
+                    console.log('📊 Database connection (Prisma) closed');
                     console.log('✅ Graceful shutdown completed');
                     process.exit(0);
                 } catch (error) {
@@ -492,29 +482,29 @@ const startServer = async () => {
                     process.exit(1);
                 }
             });
-            
+
             // Force close after 30 seconds
             setTimeout(() => {
                 console.error('⚠️  Forced shutdown after timeout');
                 process.exit(1);
             }, 30000);
         };
-        
+
         // Handle shutdown signals
         process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
         process.on('SIGINT', () => gracefulShutdown('SIGINT'));
-        
+
         // Handle uncaught exceptions
         process.on('uncaughtException', (error) => {
             console.error('❌ Uncaught Exception:', error);
             gracefulShutdown('UNCAUGHT_EXCEPTION');
         });
-        
+
         process.on('unhandledRejection', (reason, promise) => {
             console.error('❌ Unhandled Rejection at:', promise, 'reason:', reason);
             gracefulShutdown('UNHANDLED_REJECTION');
         });
-        
+
     } catch (error) {
         console.error('❌ Failed to start server:', error);
         process.exit(1);

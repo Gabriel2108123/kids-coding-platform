@@ -1,0 +1,4 @@
+﻿src/components/CollaborativeCodingRoom.tsx(373,13): error TS2322: Type '{ onChange: (code: string, xml: string) => void; initialCode: string; readOnly: boolean; }' is not assignable to type 'IntrinsicAttributes & BlocklyEditorProps'.
+  Property 'onChange' does not exist on type 'IntrinsicAttributes & BlocklyEditorProps'.
+src/components/InteractiveCodingExercise.tsx(355,15): error TS2322: Type '{ onChange: (code: string, xml: string) => void; ageGroup: FrontendAgeGroup; availableBlocks: string[] | undefined; }' is not assignable to type 'IntrinsicAttributes & BlocklyEditorProps'.
+  Property 'onChange' does not exist on type 'IntrinsicAttributes & BlocklyEditorProps'.

@@ -1,5 +1,5 @@
 import express from 'express';
-import { MascotController } from '../controllers/mascotController';
+import { chat, getStepMessage, getHelp, celebrate } from '../controllers/mascotController';
 import { authMiddleware } from '../middleware/authMiddleware';
 
 const router = express.Router();
@@ -12,27 +12,27 @@ router.use(authMiddleware);
  * @desc Get AI-powered chat response from mascot
  * @access Private (authenticated children only)
  */
-router.post('/chat', MascotController.chat);
+router.post('/chat', chat);
 
 /**
  * @route POST /api/mascot/step-message
  * @desc Get contextual step introduction message
  * @access Private (authenticated children only)
  */
-router.post('/step-message', MascotController.getStepMessage);
+router.post('/step-message', getStepMessage);
 
 /**
  * @route POST /api/mascot/help
  * @desc Get help message when child is stuck
  * @access Private (authenticated children only)
  */
-router.post('/help', MascotController.getHelp);
+router.post('/help', getHelp);
 
 /**
  * @route POST /api/mascot/celebrate
  * @desc Get celebration message for achievements
  * @access Private (authenticated children only)
  */
-router.post('/celebrate', MascotController.celebrate);
+router.post('/celebrate', celebrate);
 
 export default router;

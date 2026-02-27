@@ -81,7 +81,7 @@ class BadgeService {
     private readonly baseURL: string;
 
     constructor() {
-        this.baseURL = `${process.env.REACT_APP_API_URL || 'http://localhost:3001'}/api/badges`;
+        this.baseURL = `${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/badges`;
     }
 
     // ==========================================
@@ -93,13 +93,13 @@ class BadgeService {
      */
     private getAuthToken(): string | null {
         const userType = localStorage.getItem('userType') as 'parent' | 'child' | null;
-        
+
         if (userType === 'parent') {
             return localStorage.getItem('parentToken');
         } else if (userType === 'child') {
             return localStorage.getItem('childToken');
         }
-        
+
         return null;
     }
 

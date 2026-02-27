@@ -35,7 +35,8 @@ export const useAIMascot = () => {
     setError(null);
 
     try {
-      const response = await fetch('/api/mascot/chat', {
+      const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
+      const response = await fetch(`${API_URL}/mascot/chat`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -70,7 +71,7 @@ export const useAIMascot = () => {
             timestamp: result.data.timestamp,
           },
         ];
-        
+
         setConversationHistory(newHistory);
         return result.data.response;
       }
@@ -93,7 +94,8 @@ export const useAIMascot = () => {
     setError(null);
 
     try {
-      const response = await fetch('/api/mascot/step-message', {
+      const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
+      const response = await fetch(`${API_URL}/mascot/step-message`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -130,7 +132,8 @@ export const useAIMascot = () => {
     setError(null);
 
     try {
-      const response = await fetch('/api/mascot/help', {
+      const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
+      const response = await fetch(`${API_URL}/mascot/help`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -167,7 +170,8 @@ export const useAIMascot = () => {
     setError(null);
 
     try {
-      const response = await fetch('/api/mascot/celebrate', {
+      const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
+      const response = await fetch(`${API_URL}/mascot/celebrate`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

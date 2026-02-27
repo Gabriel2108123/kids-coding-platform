@@ -20,7 +20,7 @@ const HomePage: React.FC = () => {
     // Helper function to get the selected mascot (single mascot system)
     const getSelectedMascot = (user: ChildProfile | null): string | null => {
       if (!user) return null;
-      
+
       // Get mascot from settings.learning.visualPreferences[0]
       return user.settings?.learning?.visualPreferences?.[0] || null;
     };
@@ -28,11 +28,11 @@ const HomePage: React.FC = () => {
     // Helper function to determine if this is the child's first login
     const isFirstLogin = (user: ChildProfile | null): boolean => {
       if (!user) return false;
-      
+
       // Check if user has never completed any modules and has no mascot
       const hasCompletedModules = user.progress?.completedModules && user.progress.completedModules.length > 0;
       const hasMascot = getSelectedMascot(user) !== null;
-      
+
       return !hasCompletedModules && !hasMascot;
     };
 
@@ -47,18 +47,18 @@ const HomePage: React.FC = () => {
     console.log('Child learning settings:', childUser?.settings?.learning);
     // eslint-disable-next-line no-console
     console.log('Child visual preferences:', childUser?.settings?.learning?.visualPreferences);
-    
+
     // Check if mascot is already selected using helper function
     const selectedMascot = getSelectedMascot(childUser);
     const firstLogin = isFirstLogin(childUser);
-    
+
     // eslint-disable-next-line no-console
     console.log('Selected mascot from backend:', selectedMascot);
     // eslint-disable-next-line no-console
     console.log('Is first login:', firstLogin);
     // eslint-disable-next-line no-console
     console.log('Should show mascot selector:', childUser && !selectedMascot);
-    
+
     // Show mascot selector for first-time users
     if (childUser && !selectedMascot) {
       setShowMascotSelector(true);
@@ -90,10 +90,10 @@ const HomePage: React.FC = () => {
 
       // eslint-disable-next-line no-console
       console.log('Child selected mascot:', mascotId);
-      
+
       // Direct API call to update mascot (simplified since settings are removed)
       const token = localStorage.getItem('authToken');
-      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:3001/api'}/users/mascot`, {
+      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/users/mascot`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -107,16 +107,16 @@ const HomePage: React.FC = () => {
       }
 
       const result = await response.json();
-      
+
       // eslint-disable-next-line no-console
       console.log('Mascot update result:', result);
-      
+
       // eslint-disable-next-line no-console
       console.log('Mascot selection successful, hiding selector');
-      
+
       // Hide the mascot selector immediately since we know the update was successful
       setShowMascotSelector(false);
-      
+
       // Refresh child profile to get updated data with the new mascot
       if ((familyAuth as any).initializeAuth) {
         // eslint-disable-next-line no-console
@@ -173,7 +173,7 @@ const HomePage: React.FC = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50 bg-dots">
       <Header />
-      
+
       <div className="container mx-auto px-4 py-6">
         {/* Welcome Section */}
         <div className="text-center mb-8">
@@ -303,7 +303,7 @@ const HomePage: React.FC = () => {
                 <span className="mr-2">Recent Badges</span>
                 <span className="text-2xl">🏆</span>
               </h3>
-              <button 
+              <button
                 onClick={() => navigate('/badges')}
                 className="text-blue-600 hover:text-blue-800 font-medium text-sm transition-colors"
               >
@@ -312,8 +312,8 @@ const HomePage: React.FC = () => {
             </div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               {(childUser.progress?.badges || []).slice(-3).map((badge: string, index: number) => (
-                <div 
-                  key={index} 
+                <div
+                  key={index}
                   className="flex items-center p-3 bg-gradient-to-r from-yellow-50 to-orange-50 rounded-lg border-2 border-yellow-200 shadow-sm hover:shadow-md transition-shadow cursor-pointer"
                   onClick={() => navigate('/badges')}
                 >
@@ -328,7 +328,7 @@ const HomePage: React.FC = () => {
               ))}
             </div>
             <div className="mt-4 text-center">
-              <button 
+              <button
                 onClick={() => navigate('/badges')}
                 className="bg-gradient-to-r from-yellow-400 to-orange-400 hover:from-yellow-500 hover:to-orange-500 text-white px-6 py-2 rounded-lg font-medium transition-all shadow-md hover:shadow-lg"
               >
