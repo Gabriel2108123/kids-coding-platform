@@ -7,8 +7,8 @@ interface ProtectedRouteProps {
   requiredUserType?: 'parent' | 'child';
 }
 
-const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ 
-  children, 
+const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
+  children,
   requiredUserType
 }) => {
   const { userType, currentUser, isAuthenticated, isLoading } = useFamilyAuth();
@@ -56,12 +56,12 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
     if (userType === 'parent' && requiredUserType === 'child') {
       return <Navigate to="/parent-dashboard" replace />;
     }
-    
+
     // If child tries to access parent routes, redirect to child dashboard
     if (userType === 'child' && requiredUserType === 'parent') {
       return <Navigate to="/dashboard" replace />;
     }
-    
+
     // Default fallback
     return <Navigate to="/login" replace />;
   }
@@ -72,9 +72,9 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   // For child users, check if they have basic safety settings
   if (userType === 'child') {
     const child = currentUser as any; // ChildProfile
-    
-    // Check if parental consent is given (backend uses 'parentalConsent', not 'parentalConsentGiven')
-    if (!child.coppa?.parentalConsent && !child.hasParentalConsent) {
+
+    // Check if parental consent is given (backend uses 'parentalConsent' or 'consentGiven')
+    if (!child.coppa?.parentalConsent && !child.hasParentalConsent && !child.coppa?.consentGiven) {
       return (
         <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-purple-50">
           <div className="bg-white rounded-lg shadow-lg p-8 max-w-md mx-4 text-center">

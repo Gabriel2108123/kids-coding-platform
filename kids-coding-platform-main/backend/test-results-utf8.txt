@@ -1,0 +1,55 @@
+﻿--- Creating and Verifying Test Accounts ---
+
+[1] Registering Parent: john.doe@test.local
+    Γ£à Registered parent: john.doe@test.local (Token received)
+
+[2] Logged in successfully: Authenticating parent profile via /auth/profile
+    Γ£à Profile authenticated: John Doe
+
+[3] Adding Children for John...
+    - Adding Child: timmy_doe
+    Γ£à Created child: timmy_doe
+    - Authenticating Child: timmy_doe
+    Γ£à Child login verified for: timmy_doe
+    - Adding Child: sally_doe
+    Γ£à Created child: sally_doe
+    - Authenticating Child: sally_doe
+    Γ£à Child login verified for: sally_doe
+
+----------------------------------------
+
+[1] Registering Parent: jane.smith@test.local
+    Γ£à Registered parent: jane.smith@test.local (Token received)
+
+[2] Logged in successfully: Authenticating parent profile via /auth/profile
+    Γ£à Profile authenticated: Jane Smith
+
+[3] Adding Children for Jane...
+    - Adding Child: billy_smith
+    Γ£à Created child: billy_smith
+    - Authenticating Child: billy_smith
+    Γ£à Child login verified for: billy_smith
+
+----------------------------------------
+
+=== ACCOUNT SUMMARY ===
+
+PARENT:
+  Email: john.doe@test.local
+  Password: Password123!
+  Children:
+    - Username: timmy_doe
+      Email: timmy_doe@kids.local
+      Password: password123
+    - Username: sally_doe
+      Email: sally_doe@kids.local
+      Password: password123
+
+PARENT:
+  Email: jane.smith@test.local
+  Password: Password123!
+  Children:
+    - Username: billy_smith
+      Email: billy_smith@kids.local
+      Password: password123
+

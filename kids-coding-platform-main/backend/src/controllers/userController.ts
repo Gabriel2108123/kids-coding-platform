@@ -365,20 +365,11 @@ export const loginUser = async (req: Request, res: Response) => {
             });
         }
 
-        // Check password
-        const isMatch = await bcrypt.compare(password, (user as any).passwordHash);
-        if (!isMatch) {
-            return res.status(401).json({
-                success: false,
-                message: 'Invalid email or password'
-            });
-        }
+        // Update last login
+        const userAuth: any = typeof user.auth === 'object' && user.auth !== null ? { ...user.auth } : {};
+        userAuth.last_login_at = new Date().toISOString();
 
-        // Update last login and streak
-        const userAuth = (user.auth as any) || {};
-        userAuth.last_login_at = new Date();
-
-        const userProgress = (user.progress as any) || {};
+        const userProgress: any = typeof user.progress === 'object' && user.progress !== null ? { ...user.progress } : {};
         const today = new Date();
         const lastActive = userProgress.lastActiveDate ? new Date(userProgress.lastActiveDate) : null;
 
@@ -392,15 +383,29 @@ export const loginUser = async (req: Request, res: Response) => {
         } else {
             userProgress.streakDays = 1;
         }
-        userProgress.lastActiveDate = today;
+        userProgress.lastActiveDate = today.toISOString();
 
-        await prisma.user.update({
-            where: { id: user.id },
-            data: {
-                auth: userAuth,
-                progress: userProgress
-            }
-        });
+        // Check if password hash is stored in user object directly for backward compatibility
+        const isMatch = await bcrypt.compare(password, user.passwordHash);
+        if (!isMatch) {
+            return res.status(401).json({
+                success: false,
+                message: 'Invalid email or password'
+            });
+        }
+
+        try {
+            await prisma.user.update({
+                where: { id: user.id },
+                data: {
+                    auth: userAuth,
+                    progress: userProgress
+                }
+            });
+        } catch (updateError) {
+            console.warn('Failed to update user login stats:', updateError);
+            // Non-fatal error, continue with login
+        }
 
         const userCoppa = (user.coppa as any) || {};
         const tokenExpiration = rememberMe ? '30d' : (userCoppa.requiresParentalConsent ? '2h' : '24h');
@@ -1086,7 +1091,130 @@ export const getParentChildren = async (req: AuthenticatedRequest, res: Response
 };
 
 export const addChild = async (req: AuthenticatedRequest, res: Response) => {
-    return res.status(501).json({ success: false, message: 'Not implemented' });
+    try {
+        if (req.user.role !== 'parent') {
+            return res.status(403).json({
+                success: false,
+                message: 'Parent access required'
+            });
+        }
+
+        const { username, email, password, dateOfBirth, displayName } = req.body;
+
+        if (!username || !password || !displayName) {
+            return res.status(400).json({
+                success: false,
+                message: 'Username, password, and display name are required'
+            });
+        }
+
+        // Check if username already exists
+        const existingUser = await prisma.user.findFirst({
+            where: { username }
+        });
+
+        if (existingUser) {
+            return res.status(400).json({
+                success: false,
+                message: 'Username is already taken'
+            });
+        }
+
+        // Hash password
+        const salt = await bcrypt.genSalt(10);
+        const hashedPassword = await bcrypt.hash(password, salt);
+
+        // Calculate age
+        let age = null;
+        let ageGroup = null;
+        if (dateOfBirth) {
+            const dob = new Date(dateOfBirth);
+            const today = new Date();
+            age = today.getFullYear() - dob.getFullYear();
+            if (today.getMonth() < dob.getMonth() || (today.getMonth() === dob.getMonth() && today.getDate() < dob.getDate())) {
+                age--;
+            }
+            ageGroup = getAgeGroup(age);
+        }
+
+        // Create child
+        const child = await prisma.user.create({
+            data: {
+                username,
+                email: email || `${username}@kids.local`,
+                passwordHash: hashedPassword,
+                role: 'student',
+                displayName,
+                firstName: displayName.split(' ')[0],
+                lastName: displayName.split(' ').slice(1).join(' ') || '',
+                dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : null,
+                age,
+                ageGroup,
+                parentId: req.user.id,
+                isActive: true,
+                progress: {
+                    totalXP: 0,
+                    completedModules: 0,
+                    currentLevel: 1,
+                    badges: 0,
+                    skills: {},
+                    streakDays: 0,
+                    learningPath: []
+                },
+                coppa: {
+                    requiresParentalConsent: false,
+                    parentalConsent: true,
+                    consentGiven: true, // Legacy compatibility
+                    consentDate: new Date(),
+                    consentMethod: 'parent_dashboard_creation',
+                    status: 'approved'
+                },
+                safety: {
+                    contentFilterLevel: 'strict',
+                    socialInteractions: 'none',
+                    parentalControls: {
+                        timeLimit: 60,
+                        allowedFeatures: ['learn', 'practice'],
+                        requireApprovalForSharing: true,
+                        blockedWords: []
+                    },
+                    maxDailyTime: 60
+                }
+            },
+            select: {
+                id: true,
+                username: true,
+                displayName: true,
+                firstName: true,
+                lastName: true,
+                age: true,
+                ageGroup: true,
+                role: true,
+                isActive: true,
+                progress: true,
+                safety: true
+            }
+        });
+
+        // Ensure frontend child object conforms to expected ChildProfile interface (requires _id to match database id)
+        const frontendChild = {
+            ...child,
+            _id: child.id,
+            parent: req.user.id
+        };
+
+        return res.status(201).json({
+            success: true,
+            message: 'Child account created successfully',
+            data: frontendChild
+        });
+    } catch (error) {
+        console.error('Error creating child account:', error);
+        return res.status(500).json({
+            success: false,
+            message: 'Error creating child account'
+        });
+    }
 };
 
 export const getChildren = getParentChildren;

@@ -91,8 +91,9 @@ const HomePage: React.FC = () => {
       // eslint-disable-next-line no-console
       console.log('Child selected mascot:', mascotId);
 
-      // Direct API call to update mascot (simplified since settings are removed)
-      const token = localStorage.getItem('authToken');
+      // Direct API call to update mascot
+      const token = (familyAuth as any).token || localStorage.getItem('authToken') || localStorage.getItem('token');
+
       const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/users/mascot`, {
         method: 'PUT',
         headers: {

@@ -1,0 +1,33 @@
+[dotenv@17.3.1] injecting env (0) from .env -- tip: 🛡️ auth for agents: https://vestauth.com
+🚀 Starting Kids Coding Platform Server...
+📊 Connecting to database (Prisma)...
+⚠️ Database connection failed: PrismaClientInitializationError: error: Environment variable not found: DATABASE_URL.
+  -->  schema.prisma:7
+   | 
+ 6 |   provider  = "postgresql"
+ 7 |   url       = env("DATABASE_URL")
+   | 
+
+Validation Error Count: 1
+    at r (D:\Kids-Coding-Platrform\kids-coding-platform\kids-coding-platform-main\backend\node_modules\@prisma\client\src\runtime\core\engines\library\LibraryEngine.ts:440:17)
+    at async startServer (D:\Kids-Coding-Platrform\kids-coding-platform\kids-coding-platform-main\backend\src\index.ts:444:13) {
+  clientVersion: '6.19.2',
+  errorCode: 'P1012',
+  retryable: undefined
+}
+❌ Uncaught Exception: Error: listen EADDRINUSE: address already in use ::1:3001
+    at Server.setupListenHandle [as _listen2] (node:net:1940:16)
+    at listenInCluster (node:net:1997:12)
+    at GetAddrInfoReqWrap.callback (node:net:2206:7)
+    at GetAddrInfoReqWrap.onlookupall [as oncomplete] (node:dns:133:8) {
+  code: 'EADDRINUSE',
+  errno: -4091,
+  syscall: 'listen',
+  address: '::1',
+  port: 3001
+}
+
+🛑 Received UNCAUGHT_EXCEPTION. Starting graceful shutdown...
+📡 HTTP server closed
+📊 Database connection (Prisma) closed
+✅ Graceful shutdown completed
