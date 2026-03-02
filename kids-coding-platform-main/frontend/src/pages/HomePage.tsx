@@ -92,7 +92,7 @@ const HomePage: React.FC = () => {
       console.log('Child selected mascot:', mascotId);
 
       // Direct API call to update mascot
-      const token = (familyAuth as any).token || localStorage.getItem('authToken') || localStorage.getItem('token');
+      const token = (familyAuth as any).token || localStorage.getItem('childToken') || localStorage.getItem('authToken') || localStorage.getItem('token');
 
       const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/users/mascot`, {
         method: 'PUT',

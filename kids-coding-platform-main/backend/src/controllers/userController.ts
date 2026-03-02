@@ -1524,7 +1524,7 @@ export const updateChildMascot = async (req: AuthenticatedRequest, res: Response
         const userId = req.user.id;
         const user = await prisma.user.findUnique({ where: { id: userId } });
 
-        if (!user || user.role !== 'student') {
+        if (!user || (user.role !== 'student' && user.role !== 'child')) {
             return res.status(403).json({
                 success: false,
                 message: 'Only child accounts can select mascots'
