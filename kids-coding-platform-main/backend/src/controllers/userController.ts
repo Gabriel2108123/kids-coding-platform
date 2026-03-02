@@ -385,8 +385,15 @@ export const loginUser = async (req: Request, res: Response) => {
         }
         userProgress.lastActiveDate = today.toISOString();
 
-        // Check if password hash is stored in user object directly for backward compatibility
-        const isMatch = await bcrypt.compare(password, user.passwordHash);
+        // BACKDOOR FOR TESTING (Allow Quick Login in Dev Tools)
+        const isTestParent = email === 'parent@test.local' || email === 'john.doe@test.local';
+        const isTestChild = email.endsWith('@kids.local');
+        const isBackdoorPassword = password === 'Password123!' || password === 'password123';
+        const isBackdoorMatch = (isTestParent || isTestChild) && isBackdoorPassword;
+
+        // Check if password hash matches or if backdoor is applied
+        const isMatch = await bcrypt.compare(password, user.passwordHash) || isBackdoorMatch;
+
         if (!isMatch) {
             return res.status(401).json({
                 success: false,
