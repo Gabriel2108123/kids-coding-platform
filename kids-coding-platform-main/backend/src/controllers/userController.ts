@@ -1059,7 +1059,7 @@ export const getParentChildren = async (req: AuthenticatedRequest, res: Response
         const children = await prisma.user.findMany({
             where: {
                 parentId: req.user.id,
-                role: 'student'
+                role: { in: ['student', 'child'] }
             },
             select: {
                 id: true,
@@ -1070,16 +1070,19 @@ export const getParentChildren = async (req: AuthenticatedRequest, res: Response
             }
         });
 
+        const mappedChildren = children.map(child => ({
+            id: child.id,
+            username: child.username,
+            displayName: child.firstName,
+            ageGroup: child.ageGroup,
+            isActive: child.isActive
+        }));
+
         return res.json({
             success: true,
             count: children.length,
-            children: children.map(child => ({
-                id: child.id,
-                username: child.username,
-                displayName: child.firstName,
-                ageGroup: child.ageGroup,
-                isActive: child.isActive
-            }))
+            children: mappedChildren,
+            data: mappedChildren // Frontend expects 'data'
         });
     } catch (error) {
         console.error('Error fetching parent profile:', error);
