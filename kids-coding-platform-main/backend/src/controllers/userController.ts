@@ -1232,7 +1232,7 @@ export const updateChild = async (req: AuthenticatedRequest, res: Response) => {
             where: {
                 id: childId,
                 parentId: req.user.id,
-                role: 'student'
+                role: { in: ['student', 'child'] }
             }
         });
 
@@ -1243,11 +1243,20 @@ export const updateChild = async (req: AuthenticatedRequest, res: Response) => {
             });
         }
 
+        // Handle password update if provided
+        let passwordHash = undefined;
+        if (updates.password) {
+            const salt = await bcrypt.genSalt(10);
+            passwordHash = await bcrypt.hash(updates.password, salt);
+        }
+
         const updatedChild = await prisma.user.update({
             where: { id: childId },
             data: {
-                firstName: updates.displayName || undefined,
-                avatarUrl: updates.avatarUrl || undefined,
+                displayName: updates.displayName || undefined,
+                firstName: updates.displayName ? updates.displayName.split(' ')[0] : undefined,
+                passwordHash,
+                avatarUrl: updates.avatar || undefined,
                 settings: updates.settings ? (updates.settings as any) : undefined,
                 safety: updates.safety ? (updates.safety as any) : undefined
             }
@@ -1258,12 +1267,14 @@ export const updateChild = async (req: AuthenticatedRequest, res: Response) => {
             message: 'Child updated successfully',
             data: {
                 id: updatedChild.id,
+                _id: updatedChild.id,
                 username: updatedChild.username,
-                displayName: updatedChild.firstName,
+                displayName: updatedChild.displayName || updatedChild.firstName,
                 ageGroup: updatedChild.ageGroup,
                 avatar: updatedChild.avatarUrl,
                 settings: updatedChild.settings,
-                safety: updatedChild.safety
+                safety: updatedChild.safety,
+                progress: updatedChild.progress
             }
         });
     } catch (error) {
