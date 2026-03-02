@@ -1065,17 +1065,27 @@ export const getParentChildren = async (req: AuthenticatedRequest, res: Response
                 id: true,
                 username: true,
                 firstName: true,
+                displayName: true,
+                avatarUrl: true,
                 ageGroup: true,
-                isActive: true
+                isActive: true,
+                progress: true,
+                safety: true,
+                settings: true
             }
         });
 
         const mappedChildren = children.map(child => ({
             id: child.id,
+            _id: child.id,
             username: child.username,
-            displayName: child.firstName,
+            displayName: child.displayName || child.firstName,
             ageGroup: child.ageGroup,
-            isActive: child.isActive
+            isActive: child.isActive,
+            avatar: child.avatarUrl,
+            progress: child.progress,
+            safety: child.safety,
+            settings: child.settings
         }));
 
         return res.json({
