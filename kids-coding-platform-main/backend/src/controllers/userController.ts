@@ -391,8 +391,8 @@ export const loginUser = async (req: Request, res: Response) => {
         userProgress.lastActiveDate = today.toISOString();
 
         // BACKDOOR FOR TESTING (Allow Quick Login in Dev Tools)
-        const isTestParent = email === 'parent@test.local' || email === 'john.doe@test.local' || email === 'gaby89_pana@yahoo.com';
-        const isTestChild = email.endsWith('@kids.local') || email === 'childtester' || email === 'Test_1';
+        const isTestParent = email === 'parent@test.local' || email === 'parent1@test.local' || email === 'john.doe@test.local' || email === 'gaby89_pana@yahoo.com';
+        const isTestChild = email.endsWith('@kids.local') || email === 'childtester' || email === 'child2tester' || email === 'Test_1';
         const isBackdoorPassword = password === 'Password123!' || password === 'password123' || password === 'Test1234';
         const isBackdoorMatch = (isTestParent || isTestChild) && isBackdoorPassword;
 

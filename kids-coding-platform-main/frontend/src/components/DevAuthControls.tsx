@@ -18,7 +18,7 @@ const DevAuthControls: React.FC = () => {
 
   const quickLoginChild = async () => {
     try {
-      await loginChild('childtester@kids.local', 'password123');
+      await loginChild('child2tester', 'password123');
       navigate('/');
     } catch (error) {
       // eslint-disable-next-line no-console
@@ -28,7 +28,7 @@ const DevAuthControls: React.FC = () => {
 
   const quickLoginParent = async () => {
     try {
-      await loginParent('parent@test.local', 'Password123!');
+      await loginParent('parent1@test.local', 'Password123!');
       navigate('/parent-dashboard');
     } catch (error) {
       // eslint-disable-next-line no-console
