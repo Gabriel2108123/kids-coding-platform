@@ -18,7 +18,7 @@ const DevAuthControls: React.FC = () => {
 
   const quickLoginChild = async () => {
     try {
-      await loginChild('Test_1', 'Test1234');
+      await loginChild('childtester@kids.local', 'password123');
       navigate('/');
     } catch (error) {
       // eslint-disable-next-line no-console
@@ -28,7 +28,7 @@ const DevAuthControls: React.FC = () => {
 
   const quickLoginParent = async () => {
     try {
-      await loginParent('gaby89_pana@yahoo.com', 'Test1234');
+      await loginParent('parent@test.local', 'Password123!');
       navigate('/parent-dashboard');
     } catch (error) {
       // eslint-disable-next-line no-console
@@ -39,15 +39,15 @@ const DevAuthControls: React.FC = () => {
   return (
     <div className="fixed bottom-4 right-4 bg-red-100 border border-red-300 rounded-lg p-3 shadow-lg z-50 max-w-xs">
       <div className="text-xs font-bold text-red-800 mb-2">🔧 DEV TOOLS</div>
-      
+
       {/* Current User Info */}
       {currentUser && (
         <div className="text-xs text-gray-600 mb-3 p-2 bg-gray-50 rounded">
           <div className="font-medium">Current User:</div>
           <div>Type: {userType}</div>
           <div>Name: {
-            userType === 'child' 
-              ? (currentUser as any)?.displayName 
+            userType === 'child'
+              ? (currentUser as any)?.displayName
               : (currentUser as any)?.firstName
           }</div>
         </div>
@@ -84,7 +84,7 @@ const DevAuthControls: React.FC = () => {
             🚪 Logout User
           </button>
         )}
-        
+
         <button
           onClick={clearAllAuth}
           className="block w-full text-left text-xs bg-red-500 text-white px-2 py-1 rounded hover:bg-red-600"
