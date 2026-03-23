@@ -1,17 +1,13 @@
-D:\projects\antigravity\bugsby\kids-coding-platform-main\kids-coding-platform-main\backend\node_modules\express\lib\router\route.js:216
-        throw new Error(msg);
-        ^
+PrismaClientInitializationError: 
+Invalid `prisma.user.findFirst()` invocation in
+D:\Kids-Coding-Platrform\kids-coding-platform\kids-coding-platform-main\backend\test-db.js:4:13
 
-Error: Route.post() requires a callback function but got a [object Undefined]
-    at Route.<computed> [as post] (D:\projects\antigravity\bugsby\kids-coding-platform-main\kids-coding-platform-main\backend\node_modules\express\lib\router\route.js:216:15)
-    at proto.<computed> [as post] (D:\projects\antigravity\bugsby\kids-coding-platform-main\kids-coding-platform-main\backend\node_modules\express\lib\router\index.js:521:19)
-    at Object.<anonymous> (D:\projects\antigravity\bugsby\kids-coding-platform-main\kids-coding-platform-main\backend\dist\routes\userRoutes.js:16:8)
-    at Module._compile (node:internal/modules/cjs/loader:1734:14)
-    at Object..js (node:internal/modules/cjs/loader:1899:10)
-    at Module.load (node:internal/modules/cjs/loader:1469:32)
-    at Function._load (node:internal/modules/cjs/loader:1286:12)
-    at TracingChannel.traceSync (node:diagnostics_channel:322:14)
-    at wrapModuleLoad (node:internal/modules/cjs/loader:235:24)
-    at Module.require (node:internal/modules/cjs/loader:1491:12)
-
-Node.js v23.9.0
+  1 const fs = require('fs');
+  2 const { PrismaClient } = require('@prisma/client');
+  3 const prisma = new PrismaClient();
+→ 4 prisma.user.findFirst(
+Error querying the database: FATAL: Tenant or user not found
+    at ei.handleRequestError (D:\Kids-Coding-Platrform\kids-coding-platform\kids-coding-platform-main\backend\node_modules\@prisma\client\runtime\library.js:121:7568)
+    at ei.handleAndLogRequestError (D:\Kids-Coding-Platrform\kids-coding-platform\kids-coding-platform-main\backend\node_modules\@prisma\client\runtime\library.js:121:6593)
+    at ei.request (D:\Kids-Coding-Platrform\kids-coding-platform\kids-coding-platform-main\backend\node_modules\@prisma\client\runtime\library.js:121:6300)
+    at async a (D:\Kids-Coding-Platrform\kids-coding-platform\kids-coding-platform-main\backend\node_modules\@prisma\client\runtime\library.js:130:9551)
